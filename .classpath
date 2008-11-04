@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry excluding="Testing/|Testing/NBHS_Tester/|Testing/NBHM_Tester/|Testing/CAT_Tester/" kind="src" path=""/>
+	<classpathentry excluding="NBHS_Tester/|NBHM_Tester/|CAT_Tester/" kind="src" path="Testing"/>
+	<classpathentry kind="src" path="Testing/CAT_Tester"/>
+	<classpathentry kind="src" path="Testing/NBHM_Tester"/>
+	<classpathentry kind="src" path="Testing/NBHS_Tester"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="lib/junit-4.4.jar"/>
+	<classpathentry kind="output" path=""/>
+</classpath>
