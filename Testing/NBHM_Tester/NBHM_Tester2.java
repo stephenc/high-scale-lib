@@ -23,6 +23,19 @@ public class NBHM_Tester2 extends TestCase {
   protected void setUp   () { _nbhm = new NonBlockingHashMap<String,String>(); }
   protected void tearDown() { _nbhm = null; }
 
+  // Throw a ClassCastException if I see a tombstone during key-compares
+  private static class KeyBonk {
+    final int _x;
+    KeyBonk( int i ) { _x=i; }
+    public boolean equals( Object o ) {
+      if( o == null ) return false;
+      return ((KeyBonk)o)._x    // Throw CCE here
+        == this._x; 
+    }
+    public int hashCode() { return (_x>>2); }
+    public String toString() { return "Bonk_"+Integer.toString(_x); }
+  }
+
   // Test some basic stuff; add a few keys, remove a few keys
   public void testBasic() {
     assertTrue ( _nbhm.isEmpty() );
@@ -69,6 +82,18 @@ public class NBHM_Tester2 extends TestCase {
     assertThat ( _nbhm.remove("k1"), is("v1a") );
     assertFalse( _nbhm.containsKey("k1") );
     checkSizes (0);
+
+    // Insert & Remove KeyBonks until the table resizes and we start
+    // finding Tombstone keys- and KeyBonk's equals-call with throw a
+    // ClassCastException if it sees a non-KeyBonk.
+    NonBlockingHashMap<KeyBonk,String> dumb = new NonBlockingHashMap<KeyBonk,String>();
+    for( int i=0; i<10000; i++ ) {
+      final KeyBonk happy1 = new KeyBonk(i);
+      assertThat( dumb.put(happy1,"and"), nullValue() );
+      if( (i&1)==0 )  dumb.remove(happy1);
+      final KeyBonk happy2 = new KeyBonk(i); // 'equals' but not '=='
+      dumb.get(happy2);
+    }
   }
 
   // Check all iterators for correct size counts

@@ -156,16 +156,18 @@ public class NBHM_Tester2 extends TestCase {
 
   public void testIterationBig2() {
     final int CNT = 10000;
-    assertThat( _nbhm.size(), is(0) );
+    NonBlockingHashMap<Integer,String> nbhm = new NonBlockingHashMap<Integer,String>();
     final String v = "v";
     for( int i=0; i<CNT; i++ ) {
-      final String z = "k"+i;
-      _nbhm.put(z,v);
-      String s = _nbhm.get(z);
-      assertThat( s, is(v) );
+      final Integer z = new Integer(i);
+      String s0 = nbhm.get(z);
+      assertThat( s0, nullValue() );
+      nbhm.put(z,v);
+      String s1 = nbhm.get(z);
+      assertThat( s1, is(v) );
     }
-    assertThat( _nbhm.size(), is(CNT) );
-  }
+    assertThat( nbhm.size(), is(CNT) ); 
+ }
 
   public void testIterationBig() {
     final int CNT = 10000;

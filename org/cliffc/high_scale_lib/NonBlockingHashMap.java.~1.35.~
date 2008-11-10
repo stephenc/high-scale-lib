@@ -502,10 +502,11 @@ public class NonBlockingHashMap<TypeK, TypeV>
       }
       // get and put must have the same key lookup logic!  But only 'put'
       // needs to force a table-resize for a too-long key-reprobe sequence.
-      // Check for too-many-reprobes on get.
+      // Check for too-many-reprobes on get - and flip to the new table.
       if( ++reprobe_cnt >= reprobe_limit(len) || // too many probes
     	  key == TOMBSTONE ) // found a TOMBSTONE key, means no more keys in this table
-        return get_impl(topmap,topmap.help_copy(newkvs),key); // Retry in the new table
+        return newkvs == null ? null 
+          : get_impl(topmap,topmap.help_copy(newkvs),key); // Retry in the new table
 
       idx = (idx+1)&(len-1);    // Reprobe by 1!  (could now prefetch)
     }

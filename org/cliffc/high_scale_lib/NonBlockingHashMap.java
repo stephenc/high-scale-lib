@@ -445,6 +445,15 @@ public class NonBlockingHashMap<TypeK, TypeV>
       // hash exists and matches?  hash can be zero during the install of a
       // new key/value pair.
       ((hashes[hash] == 0 || hashes[hash] == fullhash) &&
+       // Do not call the users' "equals()" call with a Tombstone, as this can
+       // surprise poorly written "equals()" calls that throw exceptions
+       // instead of simply returning false.
+       K != TOMBSTONE &&        // Do not call users' equals call with a Tombstone
+       // Do the match the hard way - with the users' key being the loop-
+       // invariant "this" pointer.  I could have flipped the order of
+       // operands (since equals is commutative), but I'm making mega-morphic
+       // v-calls in a reprobing loop and nailing down the 'this' argument
+       // gives both the JIT and the hardware a chance to prefetch the call target.
        key.equals(K));          // Finally do the hard match
   }
 
