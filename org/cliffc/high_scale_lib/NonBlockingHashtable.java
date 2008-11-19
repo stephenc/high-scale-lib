@@ -7,9 +7,9 @@
 package org.cliffc.high_scale_lib;
 import java.io.IOException;
 import java.io.Serializable;
-import java.lang.reflect.*;
+import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.*;
 import sun.misc.Unsafe;
 
@@ -69,7 +69,7 @@ import sun.misc.Unsafe;
  */
 
 public class NonBlockingHashtable<TypeK, TypeV>
-  extends Dictionary<TypeK,TypeV>
+  extends Dictionary<TypeK, TypeV>
   implements ConcurrentMap<TypeK, TypeV>, Cloneable, Serializable {
 
   private static final long serialVersionUID = 1234123412341234123L;
@@ -101,7 +101,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
   private static final class Prime {
     final Object _V;
     Prime( Object V ) { _V = V; }
-    static Object unbox( Object V ) { return V instanceof Prime ? ((Prime)V)._V : V;  }
+    static Object unbox( Object V ) { return V instanceof Prime ? ((Prime)V)._V : V; }
   }
 
   // --- hash ----------------------------------------------------------------
@@ -153,7 +153,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
   // table resize started.  The K/V pair has been marked so that no new
   // updates can happen to the old table (and since the K/V pair was deleted
   // nothing was copied to the new table).
-  private static final Prime  TOMBPRIME = new Prime(TOMBSTONE);
+  private static final Prime TOMBPRIME = new Prime(TOMBSTONE);
 
   // --- key,val -------------------------------------------------------------
   // Access K,V for a given idx
@@ -249,7 +249,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  elements will sacrifice space for a small amount of time gained.  The
    *  initial size will be rounded up internally to the next larger power of 2. */
   public NonBlockingHashtable( final int initial_sz ) { initialize(initial_sz); }
-  private final void initialize(int initial_sz ) {
+  private final void initialize( int initial_sz ) {
     if( initial_sz < 0 ) throw new IllegalArgumentException();
     int i;                      // Convert to next largest power-of-2
     if( initial_sz > 1024*1024 ) initial_sz = 1024*1024;
@@ -257,7 +257,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // Double size for K,V pairs, add 1 for CHM and 1 for hashes
     _kvs = new Object[((1<<i)<<1)+2];
     _kvs[0] = new CHM(new Counter()); // CHM in slot 0
-    _kvs[1] = new int[1<<i];                      // Matching hash entries
+    _kvs[1] = new int[1<<i];          // Matching hash entries
     _last_resize_milli = System.currentTimeMillis();
   }
   // Version for subclassed readObject calls, to be called after the defaultReadObject
@@ -267,14 +267,17 @@ public class NonBlockingHashtable<TypeK, TypeV>
 
   /** Returns the number of key-value mappings in this map.
    *  @return the number of key-value mappings in this map */
+  @Override 
   public int     size       ( )                       { return chm(_kvs).size(); }
   /** Returns <tt>size() == 0</tt>.
    *  @return <tt>size() == 0</tt> */
+  @Override 
   public boolean isEmpty    ( )                       { return size() == 0;      }
 
   /** Tests if the key in the table using the <tt>equals</tt> method.
    * @return <tt>true</tt> if the key is in the table using the <tt>equals</tt> method
    * @throws NullPointerException if the specified key is null  */
+  @Override 
   public boolean containsKey( Object key )            { return get(key) != null; }
 
   /** Legacy method testing if some key maps into the specified value in this
@@ -296,7 +299,8 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  @return the previous value associated with <tt>key</tt>, or
    *          <tt>null</tt> if there was no mapping for <tt>key</tt>
    *  @throws NullPointerException if the specified key or value is null  */
-  public TypeV   put        ( TypeK  key, TypeV val ) { return putIfMatch( key,      val,NO_MATCH_OLD);}
+  @Override
+  public TypeV   put        ( TypeK  key, TypeV val ) { return putIfMatch( key,      val, NO_MATCH_OLD); }
 
   /** Atomically, do a {@link #put} if-and-only-if the key is not mapped.
    *  Useful to ensure that only a single mapping for the key exists, even if
@@ -304,24 +308,25 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  @return the previous value associated with the specified key,
    *         or <tt>null</tt> if there was no mapping for the key
    *  @throws NullPointerException if the specified key or value is null  */
-  public TypeV   putIfAbsent( TypeK  key, TypeV val ) { return putIfMatch( key,      val,TOMBSTONE   );}
+  public TypeV   putIfAbsent( TypeK  key, TypeV val ) { return putIfMatch( key,      val, TOMBSTONE   ); }
 
   /** Removes the key (and its corresponding value) from this map.
-    * This method does nothing if the key is not in the map.
-    * @return the previous value associated with <tt>key</tt>, or
-    *         <tt>null</tt> if there was no mapping for <tt>key</tt>
-    * @throws NullPointerException if the specified key is null */
-  public TypeV   remove     ( Object key )            { return putIfMatch( key,TOMBSTONE,NO_MATCH_OLD);}
+   *  This method does nothing if the key is not in the map.
+   *  @return the previous value associated with <tt>key</tt>, or
+   *         <tt>null</tt> if there was no mapping for <tt>key</tt>
+   *  @throws NullPointerException if the specified key is null */
+  @Override
+  public TypeV   remove     ( Object key )            { return putIfMatch( key,TOMBSTONE, NO_MATCH_OLD); }
 
   /** Atomically do a {@link #remove(Object)} if-and-only-if the key is mapped
    *  to a value which is <code>equals</code> to the given value.
    *  @throws NullPointerException if the specified key or value is null */
-  public boolean remove     ( Object key,Object val ) { return putIfMatch( key,TOMBSTONE,val ) == val ;}
+  public boolean remove     ( Object key,Object val ) { return putIfMatch( key,TOMBSTONE, val ) == val; }
 
   /** Atomically do a <code>put(key,val)</code> if-and-only-if the key is
    *  mapped to some value already.
    *  @throws NullPointerException if the specified key or value is null */
-  public TypeV   replace    ( TypeK  key, TypeV val ) { return putIfMatch( key,      val,MATCH_ANY   );}
+  public TypeV   replace    ( TypeK  key, TypeV val ) { return putIfMatch( key,      val,MATCH_ANY   ); }
 
   /** Atomically do a <code>put(key,newValue)</code> if-and-only-if the key is
    *  mapped a value which is <code>equals</code> to <code>oldValue</code>.
@@ -331,7 +336,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
   }
 
   private final TypeV putIfMatch( Object key, Object newVal, Object oldVal ) {
-    if (oldVal == null || newVal == null)  throw new NullPointerException();
+    if (oldVal == null || newVal == null) throw new NullPointerException();
     final Object res = putIfMatch( this, _kvs, key, newVal, oldVal );
     assert !(res instanceof Prime);
     assert res != null;
@@ -342,12 +347,14 @@ public class NonBlockingHashtable<TypeK, TypeV>
   /** Copies all of the mappings from the specified map to this one, replacing
    *  any existing mappings.
    *  @param m mappings to be stored in this map */
+  @Override
   public void putAll(Map<? extends TypeK, ? extends TypeV> m) {
     for (Map.Entry<? extends TypeK, ? extends TypeV> e : m.entrySet())
       put(e.getKey(), e.getValue());
   }
 
   /** Removes all of the mappings from this map. */
+  @Override
   public void clear() {         // Smack a new empty table down
     Object[] newkvs = new NonBlockingHashtable(MIN_SIZE)._kvs;
     while( !CAS_kvs(_kvs,newkvs) ) // Spin until the clear works
@@ -360,6 +367,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  @param val value whose presence in this map is to be tested
    *  @return <tt>true</tt> if this map maps one or more keys to the specified value
    *  @throws NullPointerException if the specified value is null */
+  @Override
   public boolean containsValue( final Object val ) {
     if( val == null ) throw new NullPointerException();
     for( TypeV V : values() )
@@ -381,6 +389,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *
    * @return  a clone of the hashtable.
    */
+  @Override
   public Object clone() {
     try {
       // Must clone, to get the class right; NBHM might have been
@@ -404,21 +413,22 @@ public class NonBlockingHashtable<TypeK, TypeV>
     }
   }
 
-    /**
-     * Returns a string representation of this map.  The string representation
-     * consists of a list of key-value mappings in the order returned by the
-     * map's <tt>entrySet</tt> view's iterator, enclosed in braces
-     * (<tt>"{}"</tt>).  Adjacent mappings are separated by the characters
-     * <tt>", "</tt> (comma and space).  Each key-value mapping is rendered as
-     * the key followed by an equals sign (<tt>"="</tt>) followed by the
-     * associated value.  Keys and values are converted to strings as by
-     * {@link String#valueOf(Object)}.
-     *
-     * @return a string representation of this map
-     */
+  /**
+   * Returns a string representation of this map.  The string representation
+   * consists of a list of key-value mappings in the order returned by the
+   * map's <tt>entrySet</tt> view's iterator, enclosed in braces
+   * (<tt>"{}"</tt>).  Adjacent mappings are separated by the characters
+   * <tt>", "</tt> (comma and space).  Each key-value mapping is rendered as
+   * the key followed by an equals sign (<tt>"="</tt>) followed by the
+   * associated value.  Keys and values are converted to strings as by
+   * {@link String#valueOf(Object)}.
+   *
+   * @return a string representation of this map
+   */
+  @Override
   public String toString() {
     Iterator<Entry<TypeK,TypeV>> i = entrySet().iterator();
-    if (! i.hasNext())
+    if( !i.hasNext())
       return "{}";
 
     StringBuilder sb = new StringBuilder();
@@ -430,7 +440,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       sb.append(key   == this ? "(this Map)" : key);
       sb.append('=');
       sb.append(value == this ? "(this Map)" : value);
-      if (! i.hasNext())
+      if( !i.hasNext())
         return sb.append('}').toString();
       sb.append(", ");
     }
@@ -467,6 +477,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  most one such mapping.)
    * @throws NullPointerException if the specified key is null */
   // Never returns a Prime nor a Tombstone.
+  @Override
   public TypeV get( Object key ) {
     final Object V = get_impl(this,_kvs,key);
     assert !(V instanceof Prime); // Never return a Prime
@@ -514,9 +525,8 @@ public class NonBlockingHashtable<TypeK, TypeV>
       // needs to force a table-resize for a too-long key-reprobe sequence.
       // Check for too-many-reprobes on get - and flip to the new table.
       if( ++reprobe_cnt >= reprobe_limit(len) || // too many probes
-    	  key == TOMBSTONE ) // found a TOMBSTONE key, means no more keys in this table
-        return newkvs == null ? null 
-          : get_impl(topmap,topmap.help_copy(newkvs),key); // Retry in the new table
+          key == TOMBSTONE ) // found a TOMBSTONE key, means no more keys in this table
+        return newkvs == null ? null : get_impl(topmap,topmap.help_copy(newkvs),key); // Retry in the new table
 
       idx = (idx+1)&(len-1);    // Reprobe by 1!  (could now prefetch)
     }
@@ -541,7 +551,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // ---
     // Key-Claim stanza: spin till we can claim a Key (or force a resizing).
     int reprobe_cnt=0;
-    Object K=null,V=null;
+    Object K=null, V=null;
     Object[] newkvs=null;
     while( true ) {             // Spin till we get a Key slot
       V = val(kvs,idx);         // Get old value (before volatile read below!)
@@ -570,7 +580,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
         // apparently spuriously fail - and we avoid apparent spurious failure
         // by not allowing Keys to ever change.
         K = key(kvs,idx);       // CAS failed, get updated value
-        assert K != null ;      // If keys[idx] is null, CAS shoulda worked
+        assert K != null;       // If keys[idx] is null, CAS shoulda worked
       }
       // Key slot was not null, there exists a Key here
 
@@ -599,7 +609,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
       idx = (idx+1)&(len-1); // Reprobe!
     } // End of spinning till we get a Key slot
 
-
     // ---
     // Found the proper Key slot, now update the matching Value slot.  We
     // never put a null, so Value slots monotonically move from null to
@@ -622,11 +631,8 @@ public class NonBlockingHashtable<TypeK, TypeV>
          // delayed (or the read of _newkvs was so accelerated) that they
          // swapped and we still read a null _newkvs.  The resize call below
          // will do a CAS on _newkvs forcing the read.
-         V instanceof Prime) ) {
-      if( V instanceof Prime )
-        throw new Error("Untested: very rare race with reordering reads of Prime with reads of _newkvs");
+         V instanceof Prime) )
       newkvs = chm.resize(topmap,kvs); // Force the new table copy to start
-    }
     // See if we are moving to a new table.
     // If so, copy our slot and retry in the new table.
     if( newkvs != null )
@@ -642,11 +648,11 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // copy_slot.
 
     if( expVal != NO_MATCH_OLD && // Do we care about expected-Value at all?
-        V != expVal &&          // No instant match already?
+        V != expVal &&            // No instant match already?
         (expVal != MATCH_ANY || V == TOMBSTONE || V == null) &&
-        !(V==null && expVal == TOMBSTONE) &&  // Match on null/TOMBSTONE combo
+        !(V==null && expVal == TOMBSTONE) &&    // Match on null/TOMBSTONE combo
         (expVal == null || !expVal.equals(V)) ) // Expensive equals check at the last
-      return V;                 // Do not update!
+      return V;                                 // Do not update!
 
     // Actually change the Value in the Key,Value pair
     if( CAS_val(kvs, idx, V, putval ) ) {
@@ -738,7 +744,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // virtual-address and not real memory - and after Somebody wins then we
     // could in parallel initialize the array.  Java does not allow
     // un-initialized array creation (especially of ref arrays!).
-    volatile long _resizers;    // count of threads attempting an initial resize
+    volatile long _resizers; // count of threads attempting an initial resize
     private static final AtomicLongFieldUpdater<CHM> _resizerUpdater =
       AtomicLongFieldUpdater.newUpdater(CHM.class, "_resizers");
 
@@ -801,7 +807,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       // down resize operations for tables subject to a high key churn rate.
       long tm = System.currentTimeMillis();
       long q=0;
-      if( newsz <= oldlen &&    // New table would shrink or hold steady?
+      if( newsz <= oldlen && // New table would shrink or hold steady?
           tm <= topmap._last_resize_milli+10000 && // Recent resize (less than 1 sec ago)
           (q=_slots.estimate_get()) >= (sz<<1) ) // 1/2 of keys are dead?
         newsz = oldlen<<1;      // Double the existing size
@@ -888,7 +894,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       assert chm(oldkvs) == this;
       Object[] newkvs = _newkvs;
       assert newkvs != null;    // Already checked by caller
-      int oldlen = (int)len(oldkvs); // Total amount to copy
+      int oldlen = len(oldkvs); // Total amount to copy
       final int MIN_COPY_WORK = Math.min(oldlen,1024); // Limit per-thread work
 
       // ---
@@ -909,9 +915,9 @@ public class NonBlockingHashtable<TypeK, TypeV>
           copyidx = (int)_copyIdx;
           while( copyidx < (oldlen<<1) && // 'panic' check
                  !_copyIdxUpdater.compareAndSet(this,copyidx,copyidx+MIN_COPY_WORK) )
-            copyidx = (int)_copyIdx;     // Re-read
-          if( !(copyidx < (oldlen<<1)) ) // Panic!
-            panic_start = copyidx;       // Record where we started to panic-copy
+            copyidx = (int)_copyIdx;      // Re-read
+          if( !(copyidx < (oldlen<<1)) )  // Panic!
+            panic_start = copyidx;        // Record where we started to panic-copy
         }
 
         // We now know what to copy.  Try to copy.
@@ -929,7 +935,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
         // Uncomment these next 2 lines to turn on incremental table-copy.
         // Otherwise this thread continues to copy until it is all done.
         if( !copy_all && panic_start == -1 ) // No panic?
-          return;               // Then done copying after doing MIN_COPY_WORK
+          return;       // Then done copying after doing MIN_COPY_WORK
       }
       // Extra promotion check, in case another thread finished all copying
       // then got stalled before promoting.
@@ -969,7 +975,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       assert (copyDone+workdone) <= oldlen;
       if( workdone > 0 ) {
         while( !_copyDoneUpdater.compareAndSet(this,copyDone,copyDone+workdone) ) {
-          copyDone = _copyDone;   // Reload, retry
+          copyDone = _copyDone; // Reload, retry
           assert (copyDone+workdone) <= oldlen;
         }
         //if( (10*copyDone/oldlen) != (10*(copyDone+workdone)/oldlen) )
@@ -983,7 +989,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
           topmap._kvs == oldkvs && // Looking at the top-level table?
           // Attempt to promote
           topmap.CAS_kvs(oldkvs,_newkvs) ) {
-        topmap._last_resize_milli = System.currentTimeMillis();  // Record resize time for next check
+        topmap._last_resize_milli = System.currentTimeMillis(); // Record resize time for next check
         //long nano = System.nanoTime();
         //System.out.println(" "+nano+" Promote table to "+len(_newkvs));
         //if( System.out != null ) System.out.print("]");
@@ -1014,7 +1020,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       // ---
       // Prevent new values from appearing in the old table.
       // Box what we see in the old table, to prevent further updates.
-      Object oldval = val(oldkvs,idx);  // Read OLD table
+      Object oldval = val(oldkvs,idx); // Read OLD table
       while( !(oldval instanceof Prime) ) {
         final Prime box = (oldval == null || oldval == TOMBSTONE) ? TOMBPRIME : new Prime(oldval);
         if( CAS_val(oldkvs,idx,oldval,box) ) { // CAS down a box'd version of oldval
@@ -1138,12 +1144,13 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  to traverse elements as they existed upon construction of the iterator,
    *  and may (but is not guaranteed to) reflect any modifications subsequent
    *  to construction. */
+  @Override
   public Collection<TypeV> values() {
     return new AbstractCollection<TypeV>() {
-      public void    clear   (          ) {        NonBlockingHashtable.this.clear   ( ); }
-      public int     size    (          ) { return NonBlockingHashtable.this.size    ( ); }
-      public boolean contains( Object v ) { return NonBlockingHashtable.this.containsValue(v); }
-      public Iterator<TypeV> iterator()   { return new SnapshotV(); }
+      @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear        ( ); }
+      @Override public int     size    (          ) { return NonBlockingHashtable.this.size         ( ); }
+      @Override public boolean contains( Object v ) { return NonBlockingHashtable.this.containsValue(v); }
+      @Override public Iterator<TypeV> iterator()   { return new SnapshotV(); }
     };
   }
 
@@ -1176,13 +1183,14 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  to traverse elements as they existed upon construction of the iterator,
    *  and may (but is not guaranteed to) reflect any modifications subsequent
    *  to construction.  */
+  @Override
   public Set<TypeK> keySet() {
     return new AbstractSet<TypeK> () {
-      public void    clear   (          ) {        NonBlockingHashtable.this.clear   ( ); }
-      public int     size    (          ) { return NonBlockingHashtable.this.size    ( ); }
-      public boolean contains( Object k ) { return NonBlockingHashtable.this.containsKey(k); }
-      public boolean remove  ( Object k ) { return NonBlockingHashtable.this.remove  (k) != null; }
-      public Iterator<TypeK> iterator()   { return new SnapshotK(); }
+      @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear   ( ); }
+      @Override public int     size    (          ) { return NonBlockingHashtable.this.size    ( ); }
+      @Override public boolean contains( Object k ) { return NonBlockingHashtable.this.containsKey(k); }
+      @Override public boolean remove  ( Object k ) { return NonBlockingHashtable.this.remove  (k) != null; }
+      @Override public Iterator<TypeK> iterator()   { return new SnapshotK(); }
     };
   }
 
@@ -1192,11 +1200,12 @@ public class NonBlockingHashtable<TypeK, TypeV>
   private class NBHMEntry extends AbstractEntry<TypeK,TypeV> {
     NBHMEntry( final TypeK k, final TypeV v ) { super(k,v); }
     public TypeV setValue(final TypeV val) {
-      if (val == null) throw new NullPointerException();
+      if( val == null ) throw new NullPointerException();
       _val = val;
       return put(_key, val);
     }
   }
+
   private class SnapshotE implements Iterator<Map.Entry<TypeK,TypeV>> {
     final SnapshotV _ss;
     public SnapshotE() { _ss = new SnapshotV(); }
@@ -1226,22 +1235,23 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  to support this iteration.  Iterating using {@link #keySet} or {@link
    *  #values} will be more efficient.
    */
+  @Override
   public Set<Map.Entry<TypeK,TypeV>> entrySet() {
     return new AbstractSet<Map.Entry<TypeK,TypeV>>() {
-      public void    clear   (          ) {        NonBlockingHashtable.this.clear( ); }
-      public int     size    (          ) { return NonBlockingHashtable.this.size ( ); }
-      public boolean remove( final Object o ) {
-        if (!(o instanceof Map.Entry)) return false;
+      @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear( ); }
+      @Override public int     size    (          ) { return NonBlockingHashtable.this.size ( ); }
+      @Override public boolean remove( final Object o ) {
+        if( !(o instanceof Map.Entry)) return false;
         final Map.Entry<?,?> e = (Map.Entry<?,?>)o;
         return NonBlockingHashtable.this.remove(e.getKey(), e.getValue());
       }
-      public boolean contains(final Object o) {
-        if (!(o instanceof Map.Entry)) return false;
+      @Override public boolean contains(final Object o) {
+        if( !(o instanceof Map.Entry)) return false;
         final Map.Entry<?,?> e = (Map.Entry<?,?>)o;
         TypeV v = get(e.getKey());
         return v.equals(e.getValue());
       }
-      public Iterator<Map.Entry<TypeK,TypeV>> iterator() { return new SnapshotE(); }
+      @Override public Iterator<Map.Entry<TypeK,TypeV>> iterator() { return new SnapshotE(); }
     };
   }
 
@@ -1260,10 +1270,10 @@ public class NonBlockingHashtable<TypeK, TypeV>
 
   // --- readObject --------------------------------------------------------
   // Read a CHM from a stream
-  private void readObject(java.io.ObjectInputStream s) throws IOException, ClassNotFoundException  {
+  private void readObject(java.io.ObjectInputStream s) throws IOException, ClassNotFoundException {
     s.defaultReadObject();      // Read nothing
     initialize(MIN_SIZE);
-    for (;;) {
+    for(;;) {
       final TypeK K = (TypeK) s.readObject();
       final TypeV V = (TypeV) s.readObject();
       if( K == null ) break;

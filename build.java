@@ -527,6 +527,7 @@ class build {
   static final Q _cntr_j  = new Q(HSL+"/Counter.java");
   static final Q _nbhm_j  = new Q(HSL+"/NonBlockingHashMap.java");
   static final Q _nbhml_j = new Q(HSL+"/NonBlockingHashMapLong.java");
+  static final Q _nbhmid_j= new Q(HSL+"/NonBlockingIdentityHashMap.java");
   static final Q _nbhs_j  = new Q(HSL+"/NonBlockingHashSet.java");
   static final Q _nbsi_j  = new Q(HSL+"/NonBlockingSetInt.java");
   static final Q _unsaf_j = new Q(HSL+"/UtilUnsafe.java");
@@ -537,6 +538,7 @@ class build {
   static final Q _cntr_cls  = new QS(HSL+"/Counter.class"               , javac, _cntr_j );              
   static final Q _nbhm_cls  = new QS(HSL+"/NonBlockingHashMap.class"    , javac, _nbhm_j );
   static final Q _nbhml_cls = new QS(HSL+"/NonBlockingHashMapLong.class", javac, _nbhml_j);
+  static final Q _nbhmid_cls= new QS(HSL+"/NonBlockingIdentityHashMap.class", javac, _nbhmid_j );
   static final Q _nbhs_cls  = new QS(HSL+"/NonBlockingHashSet.class"    , javac, _nbhs_j );
   static final Q _nbsi_cls  = new QS(HSL+"/NonBlockingSetInt.class"     , javac, _nbsi_j );
   static final Q _unsaf_cls = new QS(HSL+"/UtilUnsafe.class"            , javac, _unsaf_j);
@@ -552,6 +554,9 @@ class build {
   static final Q _tnbhml_j  = new Q(TNBHM+"/NBHML_Tester2.java");
   static final Q _tnbhml_cls= new QS(TNBHM+"/NBHML_Tester2.class",javac_junit,_tnbhml_j);
   static final Q _tnbhml_tst= new Q_JUnit(TNBHM+"/NBHML_Tester2", java_junit+"Testing.NBHM_Tester.NBHML_Tester2",_nbhml_cls,_tnbhml_cls);
+  static final Q _tnbhmid_j  =new Q(TNBHM+"/NBHMID_Tester2.java");
+  static final Q _tnbhmid_cls=new QS(TNBHM+"/NBHMID_Tester2.class",javac_junit,_tnbhmid_j);
+  static final Q _tnbhmid_tst=new Q_JUnit(TNBHM+"/NBHMID_Tester2", java_junit+"Testing.NBHM_Tester.NBHMID_Tester2",_nbhmid_cls,_tnbhmid_cls);
 
   static final String TNBHS = "Testing/NBHS_Tester";
   static final Q _tnbhs_j   = new Q(TNBHS+"/nbhs_tester.java");
@@ -570,7 +575,7 @@ class build {
   // The high-scale-lib.jar file.  Demand JUnit testing in addition to class
   // files (the testing demands the relavent class files).
   static final Q _hsl_jar = new QS("lib/high-scale-lib.jar","jar -cf %dst "+HSL,' ',
-                                   _absen_cls, _cat_cls, _cntr_cls, _tnbhm_tst, _tnbhml_tst, _tnbhs_tst, _tnbsi_tst, _ctnbq_tst,_unsaf_cls );
+                                   _absen_cls, _cat_cls, _cntr_cls, _tnbhm_tst, _tnbhml_tst, _tnbhmid_tst, _tnbhs_tst, _tnbsi_tst, _ctnbq_tst,_unsaf_cls );
 
   // Wrappers for common JDK files
   static final String JU = "java/util";
@@ -590,7 +595,7 @@ class build {
 
 
   // The High Scale Lib javadoc files
-  static final Q _docs = new QS("doc/index.html","javadoc -quiet -classpath %top -d %top/doc -package -link http://java.sun.com/j2se/1.5.0/docs/api %src",' ',_absen_j,_cat_j,_cntr_j,_nbhm_j,_nbht_j,_nbhml_j,_nbhs_j,_nbsi_j,_unsaf_j);
+  static final Q _docs = new QS("doc/index.html","javadoc -quiet -classpath %top -d %top/doc -package -link http://java.sun.com/j2se/1.5.0/docs/api %src",' ',_absen_j,_cat_j,_cntr_j,_nbhm_j,_nbht_j,_nbhml_j,_nbhmid_j,_nbhs_j,_nbsi_j,_unsaf_j);
 
   // Build everything
   static final Q _all = new Q_touch("all", _docs, _libs);

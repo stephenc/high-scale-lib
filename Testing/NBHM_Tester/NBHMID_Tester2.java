@@ -14,14 +14,27 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
 // Test NonBlockingHashMap via JUnit
-public class NBHM_Tester2 extends TestCase {
+public class NBHMID_Tester2 extends TestCase {
   public static void main(String args[]) {
-    org.junit.runner.JUnitCore.main("Testing.NBHM_Tester.NBHM_Tester2");
+    org.junit.runner.JUnitCore.main("Testing.NBHM_Tester.NBHMID_Tester2");
   }
 
-  private NonBlockingHashMap<String,String> _nbhm;
-  protected void setUp   () { _nbhm = new NonBlockingHashMap<String,String>(); }
+  private NonBlockingIdentityHashMap<String,String> _nbhm;
+  protected void setUp   () { _nbhm = new NonBlockingIdentityHashMap<String,String>(); }
   protected void tearDown() { _nbhm = null; }
+
+  // Throw a ClassCastException if I see a tombstone during key-compares
+  private static class KeyBonk {
+    final int _x;
+    KeyBonk( int i ) { _x=i; }
+    public boolean equals( Object o ) {
+      if( o == null ) return false;
+      return ((KeyBonk)o)._x    // Throw CCE here
+        == this._x; 
+    }
+    public int hashCode() { return (_x>>2); }
+    public String toString() { return "Bonk_"+Integer.toString(_x); }
+  }
 
   // Test some basic stuff; add a few keys, remove a few keys
   public void testBasic() {
@@ -69,6 +82,18 @@ public class NBHM_Tester2 extends TestCase {
     assertThat ( _nbhm.remove("k1"), is("v1a") );
     assertFalse( _nbhm.containsKey("k1") );
     checkSizes (0);
+
+    // Insert & Remove KeyBonks until the table resizes and we start
+    // finding Tombstone keys- and KeyBonk's equals-call with throw a
+    // ClassCastException if it sees a non-KeyBonk.
+    NonBlockingIdentityHashMap<KeyBonk,String> dumb = new NonBlockingIdentityHashMap<KeyBonk,String>();
+    for( int i=0; i<10000; i++ ) {
+      final KeyBonk happy1 = new KeyBonk(i);
+      assertThat( dumb.put(happy1,"and"), nullValue() );
+      if( (i&1)==0 )  dumb.remove(happy1);
+      final KeyBonk happy2 = new KeyBonk(i); // 'equals' but not '=='
+      dumb.get(happy2);
+    }
   }
 
   // Check all iterators for correct size counts
@@ -143,7 +168,7 @@ public class NBHM_Tester2 extends TestCase {
       File f = new File("NBHM_test.txt");
       FileInputStream fis = new FileInputStream(f);
       ObjectInputStream in = new ObjectInputStream(fis);
-      NonBlockingHashMap nbhm = (NonBlockingHashMap)in.readObject();
+      NonBlockingIdentityHashMap nbhm = (NonBlockingIdentityHashMap)in.readObject();
       in.close();
       assertEquals(_nbhm.toString(),nbhm.toString());
       if( !f.delete() ) throw new IOException("delete failed");
@@ -156,7 +181,7 @@ public class NBHM_Tester2 extends TestCase {
 
   public void testIterationBig2() {
     final int CNT = 10000;
-    NonBlockingHashMap<Integer,String> nbhm = new NonBlockingHashMap<Integer,String>();
+    NonBlockingIdentityHashMap<Integer,String> nbhm = new NonBlockingIdentityHashMap<Integer,String>();
     final String v = "v";
     for( int i=0; i<CNT; i++ ) {
       final Integer z = new Integer(i);
@@ -171,9 +196,11 @@ public class NBHM_Tester2 extends TestCase {
 
   public void testIterationBig() {
     final int CNT = 10000;
+    String [] keys = new String[CNT];
+    String [] vals = new String[CNT];
     assertThat( _nbhm.size(), is(0) );
     for( int i=0; i<CNT; i++ )
-      _nbhm.put("k"+i,"v"+i);
+      _nbhm.put(keys[i]=("k"+i),vals[i]=("v"+i));
     assertThat( _nbhm.size(), is(CNT) );
 
     int sz =0;
@@ -188,8 +215,8 @@ public class NBHM_Tester2 extends TestCase {
     assertThat("Found 10000 ints",sz,is(CNT));
     assertThat("Found all integers in list",sum,is(CNT*(CNT-1)/2));
 
-    assertThat( "can remove 3", _nbhm.remove("k3"), is("v3") );
-    assertThat( "can remove 4", _nbhm.remove("k4"), is("v4") );
+    assertThat( "can remove 3", _nbhm.remove(keys[3]), is(vals[3]) );
+    assertThat( "can remove 4", _nbhm.remove(keys[4]), is(vals[4]) );
     sz =0;
     sum = 0;
     for( String s : _nbhm.keySet() ) {
@@ -208,12 +235,15 @@ public class NBHM_Tester2 extends TestCase {
 
   // Do some simple concurrent testing
   public void testConcurrentSimple() throws InterruptedException {
-    final NonBlockingHashMap<String,String> nbhm = new NonBlockingHashMap<String,String>();
+    final NonBlockingIdentityHashMap<String,String> nbhm = new NonBlockingIdentityHashMap<String,String>();
+    final String [] keys = new String[20000];
+    for( int i=0; i<20000; i++ )
+      keys[i]="k"+i;
 
     // In 2 threads, add & remove even & odd elements concurrently
-    Thread t1 = new Thread() { public void run() { work_helper(nbhm,"T1",1); } };
+    Thread t1 = new Thread() { public void run() { work_helper(nbhm,"T1",1,keys); } };
     t1.start();
-    work_helper(nbhm,"T0",0);
+    work_helper(nbhm,"T0",0,keys);
     t1.join();
 
     // In the end, all members should be removed
@@ -231,15 +261,15 @@ public class NBHM_Tester2 extends TestCase {
     }
   }
 
-  void work_helper(NonBlockingHashMap<String,String> nbhm, String thrd, int d) {
+  void work_helper(NonBlockingIdentityHashMap<String,String> nbhm, String thrd, int d, String[] keys) {
     final int ITERS = 20000;
     for( int j=0; j<10; j++ ) {
       long start = System.nanoTime();
       for( int i=d; i<ITERS; i+=2 )
         assertThat( "this key not in there, so putIfAbsent must work",
-                    nbhm.putIfAbsent("k"+i,thrd), is((String)null) );
+                    nbhm.putIfAbsent(keys[i],thrd), is((String)null) );
       for( int i=d; i<ITERS; i+=2 )
-        assertTrue( nbhm.remove("k"+i,thrd) );
+        assertTrue( nbhm.remove(keys[i],thrd) );
       double delta_nanos = System.nanoTime()-start;
       double delta_secs = delta_nanos/1000000000.0;
       double ops = ITERS*2;
@@ -247,8 +277,8 @@ public class NBHM_Tester2 extends TestCase {
     }
   }
 
-  public final void testNonBlockingHashMapSize() {
-    NonBlockingHashMap<Long,String> items = new NonBlockingHashMap<Long,String>();
+  public final void testNonBlockingIdentityHashMapSize() {
+    NonBlockingIdentityHashMap<Long,String> items = new NonBlockingIdentityHashMap<Long,String>();
     items.put(Long.valueOf(100), "100");
     items.put(Long.valueOf(101), "101");
 
@@ -277,13 +307,13 @@ public class NBHM_Tester2 extends TestCase {
   }
 
   // Concurrent insertion & then iterator test.
-  static public void testNonBlockingHashMapIterator() throws InterruptedException {
+  static public void testNonBlockingIdentityHashMapIterator() throws InterruptedException {
     final int ITEM_COUNT1 = 1000;
     final int THREAD_COUNT = 5;
     final int PER_CNT = ITEM_COUNT1/THREAD_COUNT;
     final int ITEM_COUNT = PER_CNT*THREAD_COUNT; // fix roundoff for odd thread counts
 
-    NonBlockingHashMap<Long,TestKey> nbhml = new NonBlockingHashMap<Long,TestKey>();
+    NonBlockingIdentityHashMap<Long,TestKey> nbhml = new NonBlockingIdentityHashMap<Long,TestKey>();
     // use a barrier to open the gate for all threads at once to avoid rolling
     // start and no actual concurrency
     final CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
@@ -310,11 +340,11 @@ public class NBHM_Tester2 extends TestCase {
   // the table.
   static private class NBHMLFeeder implements Callable<Object> {
     static private final Random _rand = new Random(System.currentTimeMillis());
-    private final NonBlockingHashMap<Long,TestKey> _map;
+    private final NonBlockingIdentityHashMap<Long,TestKey> _map;
     private final int _count;
     private final CyclicBarrier _barrier;
     private final long _offset;
-    public NBHMLFeeder(final NonBlockingHashMap<Long,TestKey> map, final int count, final CyclicBarrier barrier, final long offset) {
+    public NBHMLFeeder(final NonBlockingIdentityHashMap<Long,TestKey> map, final int count, final CyclicBarrier barrier, final long offset) {
       _map = map;
       _count = count;
       _barrier = barrier;
@@ -411,9 +441,9 @@ public class NBHM_Tester2 extends TestCase {
       _items.get(type).add(item);
     }
 
-    public NonBlockingHashMap<Long,TestKey> getMapMultithreaded() throws InterruptedException, ExecutionException {
+    public NonBlockingIdentityHashMap<Long,TestKey> getMapMultithreaded() throws InterruptedException, ExecutionException {
       final int threadCount = _items.keySet().size();
-      final NonBlockingHashMap<Long,TestKey> map = new NonBlockingHashMap<Long,TestKey>();
+      final NonBlockingIdentityHashMap<Long,TestKey> map = new NonBlockingIdentityHashMap<Long,TestKey>();
 
       // use a barrier to open the gate for all threads at once to avoid rolling start and no actual concurrency
       final CyclicBarrier barrier = new CyclicBarrier(threadCount);
@@ -440,10 +470,10 @@ public class NBHM_Tester2 extends TestCase {
   // --- TestKeyFeederThread
   static private class TestKeyFeederThread implements Callable<Integer> {
     private final int _type;
-    private final NonBlockingHashMap<Long,TestKey> _map;
+    private final NonBlockingIdentityHashMap<Long,TestKey> _map;
     private final List<TestKey> _items;
     private final CyclicBarrier _barrier;
-    public TestKeyFeederThread(final int type, final List<TestKey> items, final NonBlockingHashMap<Long,TestKey> map, final CyclicBarrier barrier) {
+    public TestKeyFeederThread(final int type, final List<TestKey> items, final NonBlockingIdentityHashMap<Long,TestKey> map, final CyclicBarrier barrier) {
       _type = type;
       _map = map;
       _items = items;
@@ -469,12 +499,12 @@ public class NBHM_Tester2 extends TestCase {
   }
 
   // ---
-  public void testNonBlockingHashMapIteratorMultithreaded() throws InterruptedException, ExecutionException {
+  public void testNonBlockingIdentityHashMapIteratorMultithreaded() throws InterruptedException, ExecutionException {
     TestKeyFeeder feeder = getTestKeyFeeder();
     final int itemCount = feeder.size();
 
     // validate results
-    final NonBlockingHashMap<Long,TestKey> items = feeder.getMapMultithreaded();
+    final NonBlockingIdentityHashMap<Long,TestKey> items = feeder.getMapMultithreaded();
     assertEquals("size()", itemCount, items.size());
 
     assertEquals("values().size()", itemCount, items.values().size());
@@ -499,7 +529,7 @@ public class NBHM_Tester2 extends TestCase {
   // array - but this is not part of the spec.  A different implementation
   // might put the same values into the array but in a different order.
   //public void testToArray() {
-  //  NonBlockingHashMap ht = new NonBlockingHashMap();
+  //  NonBlockingIdentityHashMap ht = new NonBlockingIdentityHashMap();
   //
   //  ht.put("Nine", new Integer(9));
   //  ht.put("Ten", new Integer(10));
