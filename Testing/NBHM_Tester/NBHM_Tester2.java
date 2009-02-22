@@ -94,6 +94,13 @@ public class NBHM_Tester2 extends TestCase {
       final KeyBonk happy2 = new KeyBonk(i); // 'equals' but not '=='
       dumb.get(happy2);
     }
+
+    // Simple insert of simple keys, with no reprobing on insert until the
+    // table gets full exactly.  Then do a 'get' on the totally full table.
+    NonBlockingHashMap<Integer,Object> map = new NonBlockingHashMap<Integer,Object>(32);
+    for( int i = 1; i < 32; i++ )
+      map.put(i, new Object());
+    map.get(33);  // this causes a NPE
   }
 
   // Check all iterators for correct size counts

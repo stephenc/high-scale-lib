@@ -70,6 +70,13 @@ public class NBHML_Tester2 extends TestCase {
     assertThat ( _nbhml.remove(1), is("v1a") );
     assertFalse( _nbhml.containsKey(1) );
     checkSizes (0);
+
+    // Simple insert of simple keys, with no reprobing on insert until the
+    // table gets full exactly.  Then do a 'get' on the totally full table.
+    NonBlockingHashMapLong<Object> map = new NonBlockingHashMapLong<Object>(32);
+    for( int i = 1; i < 32; i++ )
+      map.put(i, new Object());
+    map.get(33);  // this causes a NPE
   }
 
   // Check all iterators for correct size counts
