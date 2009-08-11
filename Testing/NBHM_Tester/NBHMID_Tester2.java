@@ -150,8 +150,10 @@ public class NBHMID_Tester2 extends TestCase {
 
   public void testSerial() {
     assertTrue ( _nbhm.isEmpty() );
-    assertThat ( _nbhm.put("k1","v1"), nullValue() );
-    assertThat ( _nbhm.put("k2","v2"), nullValue() );
+    final String k1 = "k1";
+    final String k2 = "k2";
+    assertThat ( _nbhm.put(k1,"v1"), nullValue() );
+    assertThat ( _nbhm.put(k2,"v2"), nullValue() );
 
     // Serialize it out
     try {
@@ -170,7 +172,7 @@ public class NBHMID_Tester2 extends TestCase {
       ObjectInputStream in = new ObjectInputStream(fis);
       NonBlockingIdentityHashMap nbhm = (NonBlockingIdentityHashMap)in.readObject();
       in.close();
-      assertEquals(_nbhm.toString(),nbhm.toString());
+      assertThat("serialization works",nbhm.toString(), anyOf(is("{k1=v1, k2=v2}"),is("{k2=v2, k1=v1}")));
       if( !f.delete() ) throw new IOException("delete failed");
     } catch(IOException ex) {
       ex.printStackTrace();

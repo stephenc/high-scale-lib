@@ -461,13 +461,13 @@ public class NonBlockingIdentityHashMap<TypeK, TypeV>
   // Never returns a Prime nor a Tombstone.
   @Override
   public TypeV get( Object key ) {
-    final Object V = get_impl(this,_kvs,key);
+    final int fullhash= hash (key); // throws NullPointerException if key is null
+    final Object V = get_impl(this,_kvs,key,fullhash);
     assert !(V instanceof Prime); // Never return a Prime
     return (TypeV)V;
   }
 
-  private static final Object get_impl( final NonBlockingIdentityHashMap topmap, final Object[] kvs, final Object key ) {
-    final int fullhash= hash (key); // throws NullPointerException if key is null
+  private static final Object get_impl( final NonBlockingIdentityHashMap topmap, final Object[] kvs, final Object key, final int fullhash ) {
     final int len     = len  (kvs); // Count of key/value pairs, reads kvs.length
     final CHM chm     = chm  (kvs); // The CHM, for a volatile read below; reads slot 0 of kvs
 
@@ -500,14 +500,14 @@ public class NonBlockingIdentityHashMap<TypeK, TypeV>
           return (V == TOMBSTONE) ? null : V; // Return the value
         // Key hit - but slot is (possibly partially) copied to the new table.
         // Finish the copy & retry in the new table.
-        return get_impl(topmap,chm.copy_slot_and_check(topmap,kvs,idx,key),key); // Retry in the new table
+        return get_impl(topmap,chm.copy_slot_and_check(topmap,kvs,idx,key),key,fullhash); // Retry in the new table
       }
       // get and put must have the same key lookup logic!  But only 'put'
       // needs to force a table-resize for a too-long key-reprobe sequence.
       // Check for too-many-reprobes on get - and flip to the new table.
       if( ++reprobe_cnt >= reprobe_limit(len) || // too many probes
           key == TOMBSTONE ) // found a TOMBSTONE key, means no more keys in this table
-        return newkvs == null ? null : get_impl(topmap,topmap.help_copy(newkvs),key); // Retry in the new table
+        return newkvs == null ? null : get_impl(topmap,topmap.help_copy(newkvs),key,fullhash); // Retry in the new table
 
       idx = (idx+1)&(len-1);    // Reprobe by 1!  (could now prefetch)
     }
@@ -619,31 +619,34 @@ public class NonBlockingIdentityHashMap<TypeK, TypeV>
 
     // ---
     // We are finally prepared to update the existing table
-    assert !(V instanceof Prime);
+    while( true ) {
+      assert !(V instanceof Prime);
 
-    // Must match old, and we do not?  Then bail out now.  Note that either V
-    // or expVal might be TOMBSTONE.  Also V can be null, if we've never
-    // inserted a value before.  expVal can be null if we are called from
-    // copy_slot.
+      // Must match old, and we do not?  Then bail out now.  Note that either V
+      // or expVal might be TOMBSTONE.  Also V can be null, if we've never
+      // inserted a value before.  expVal can be null if we are called from
+      // copy_slot.
 
-    if( expVal != NO_MATCH_OLD && // Do we care about expected-Value at all?
-        V != expVal &&            // No instant match already?
-        (expVal != MATCH_ANY || V == TOMBSTONE || V == null) &&
-        !(V==null && expVal == TOMBSTONE) &&    // Match on null/TOMBSTONE combo
-        (expVal == null || !expVal.equals(V)) ) // Expensive equals check at the last
-      return V;                                 // Do not update!
+      if( expVal != NO_MATCH_OLD && // Do we care about expected-Value at all?
+          V != expVal &&            // No instant match already?
+          (expVal != MATCH_ANY || V == TOMBSTONE || V == null) &&
+          !(V==null && expVal == TOMBSTONE) &&    // Match on null/TOMBSTONE combo
+          (expVal == null || !expVal.equals(V)) ) // Expensive equals check at the last
+        return V;                                 // Do not update!
 
-    // Actually change the Value in the Key,Value pair
-    if( CAS_val(kvs, idx, V, putval ) ) {
-      // CAS succeeded - we did the update!
-      // Both normal put's and table-copy calls putIfMatch, but table-copy
-      // does not (effectively) increase the number of live k/v pairs.
-      if( expVal != null ) {
-        // Adjust sizes - a striped counter
-        if(  (V == null || V == TOMBSTONE) && putval != TOMBSTONE ) chm._size.add( 1);
-        if( !(V == null || V == TOMBSTONE) && putval == TOMBSTONE ) chm._size.add(-1);
-      }
-    } else {                    // Else CAS failed
+      // Actually change the Value in the Key,Value pair
+      if( CAS_val(kvs, idx, V, putval ) ) {
+        // CAS succeeded - we did the update!
+        // Both normal put's and table-copy calls putIfMatch, but table-copy
+        // does not (effectively) increase the number of live k/v pairs.
+        if( expVal != null ) {
+          // Adjust sizes - a striped counter
+          if(  (V == null || V == TOMBSTONE) && putval != TOMBSTONE ) chm._size.add( 1);
+          if( !(V == null || V == TOMBSTONE) && putval == TOMBSTONE ) chm._size.add(-1);
+        }
+        return (V==null && expVal!=null) ? TOMBSTONE : V;
+      } 
+      // Else CAS failed
       V = val(kvs,idx);         // Get new value
       // If a Prime'd value got installed, we need to re-run the put on the
       // new table.  Otherwise we lost the CAS to another racing put.
@@ -651,10 +654,6 @@ public class NonBlockingIdentityHashMap<TypeK, TypeV>
       if( V instanceof Prime )
         return putIfMatch(topmap,chm.copy_slot_and_check(topmap,kvs,idx,expVal),key,putval,expVal);
     }
-    // Win or lose the CAS, we are done.  If we won then we know the update
-    // happened as expected.  If we lost, it means "we won but another thread
-    // immediately stomped our update with no chance of a reader reading".
-    return (V==null && expVal!=null) ? TOMBSTONE : V;
   }
 
   // --- help_copy ---------------------------------------------------------
