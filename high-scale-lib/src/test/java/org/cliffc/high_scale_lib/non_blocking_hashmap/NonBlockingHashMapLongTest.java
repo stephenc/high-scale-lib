@@ -4,7 +4,7 @@
  * Additional test cases provided by Andy Martin of TeleAtlas.
  */
 
-package Testing.NBHM_Tester;
+package org.cliffc.high_scale_lib.non_blocking_hashmap;
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -15,9 +15,9 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
 // Test NonBlockingHashMapLong via JUnit
-public class NBHML_Tester2 extends TestCase {
+public class NonBlockingHashMapLongTest extends TestCase {
   public static void main(String args[]) {
-    org.junit.runner.JUnitCore.main("Testing.NBHM_Tester.NBHML_Tester2");
+    org.junit.runner.JUnitCore.main("org.cliffc.high_scale_lib.non_blocking_hashmap.NonBlockingHashMapLongTest");
   }
 
   private NonBlockingHashMapLong<String> _nbhml;
