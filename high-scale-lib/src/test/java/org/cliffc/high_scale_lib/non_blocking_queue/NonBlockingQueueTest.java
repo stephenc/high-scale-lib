@@ -1,4 +1,4 @@
-package contrib.Testing.NBQ_Tester;
+package org.cliffc.high_scale_lib.non_blocking_queue;
 import junit.framework.TestCase;
 import java.util.Queue;
 import java.util.LinkedList;
@@ -9,9 +9,9 @@ import java.util.concurrent.LinkedBlockingQueue;
  * Created by Prashant Deva.
  * Date: Nov 1, 2008
  */
-public class NBQ_Tester extends TestCase {
+public class NonBlockingQueueTest extends TestCase {
   public static void main(String args[]) {
-    org.junit.runner.JUnitCore.main("contrib.Testing.NBQ_Tester.NBQ_Tester");
+    org.junit.runner.JUnitCore.main("contrib.Testing.NonBlockingQueueTest.NonBlockingQueueTest");
   }
 
     private Queue<Integer> queue;

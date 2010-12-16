@@ -3,7 +3,7 @@
  * http://creativecommons.org/licenses/publicdomain
  */
 
-package Testing.NBHM_Tester;
+package org.cliffc.high_scale_lib.non_blocking_hashmap;
 import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -14,9 +14,9 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
 // Test NonBlockingHashMap via JUnit
-public class NBHM_Tester2 extends TestCase {
+public class NonBlockingHashMapTest extends TestCase {
   public static void main(String args[]) {
-    org.junit.runner.JUnitCore.main("Testing.NBHM_Tester.NBHM_Tester2");
+    org.junit.runner.JUnitCore.main("org.cliffc.high_scale_lib.non_blocking_hashmap.NonBlockingHashMapTest");
   }
 
   private NonBlockingHashMap<String,String> _nbhm;

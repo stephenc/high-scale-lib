@@ -3,7 +3,7 @@
  * http://creativecommons.org/licenses/publicdomain
  */
 
-package Testing.NBHS_Tester;
+package org.cliffc.high_scale_lib.non_blocking_hashset;
 import java.io.*;
 import java.util.*;
 import junit.framework.TestCase;
@@ -12,9 +12,9 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
 
 // Test NonBlockingHashSet via JUnit
-public class nbhs_tester extends TestCase {
+public class NonBlockingHashSetTest extends TestCase {
   public static void main(String args[]) {
-    org.junit.runner.JUnitCore.main("Testing.NBHS_Tester.nbhs_tester");
+    org.junit.runner.JUnitCore.main("org.cliffc.high_scale_lib.non_blocking_hashset.NonBlockingHashSetTest");
   }
 
   private NonBlockingHashSet<String> _nbhs;
