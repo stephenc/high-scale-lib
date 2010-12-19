@@ -3,7 +3,6 @@
  * http://creativecommons.org/licenses/publicdomain
  */
 
-/* WARNING: MACHINE GENERATED FILE!  DO NOT EDIT!*/
 package org.cliffc.high_scale_lib;
 import java.io.IOException;
 import java.io.Serializable;
@@ -18,7 +17,7 @@ import sun.misc.Unsafe;
  * with better scaling properties and generally lower costs to mutate the Map.
  * It provides identical correctness properties as ConcurrentHashMap.  All
  * operations are non-blocking and multi-thread safe, including all update
- * operations.  {@link NonBlockingHashtable} scales substatially better than
+ * operations.  {@link NonBlockingHashMap} scales substatially better than
  * {@link java.util.concurrent.ConcurrentHashMap} for high update rates, even with a
  * large concurrency factor.  Scaling is linear up to 768 CPUs on a 768-CPU
  * Azul box, even with 100% updates or 100% reads or any fraction in-between.
@@ -66,10 +65,15 @@ import sun.misc.Unsafe;
  * @author Cliff Click
  * @param <TypeK> the type of keys maintained by this map
  * @param <TypeV> the type of mapped values
+ * 
+ *  @author Prashant Deva 
+ *  Modified from original NonBlockingHashMap to use identity equality.
+ *  Uses System.identityHashCode() to calculate hashMap.
+ *  Key equality is compared using '=='.
  */
 
-public class NonBlockingHashtable<TypeK, TypeV>
-  extends Dictionary<TypeK, TypeV>
+public class NonBlockingIdentityHashMap<TypeK, TypeV>
+  extends AbstractMap<TypeK, TypeV>
   implements ConcurrentMap<TypeK, TypeV>, Cloneable, Serializable {
 
   private static final long serialVersionUID = 1234123412341234123L;
@@ -89,7 +93,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
   private static final long _kvs_offset;
   static {                      // <clinit>
     Field f = null;
-    try { f = NonBlockingHashtable.class.getDeclaredField("_kvs"); }
+    try { f = NonBlockingHashMap.class.getDeclaredField("_kvs"); }
     catch( java.lang.NoSuchFieldException e ) { throw new RuntimeException(e); }
     _kvs_offset = _unsafe.objectFieldOffset(f);
   }
@@ -107,7 +111,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
   // --- hash ----------------------------------------------------------------
   // Helper function to spread lousy hashCodes
   private static final int hash(final Object key) {
-    int h = key.hashCode();     // The real hashCode call
+    int h = System.identityHashCode(key); // The real hashCode call
     h ^= (h>>>20) ^ (h>>>12);
     h ^= (h>>> 7) ^ (h>>> 4);
     return h;
@@ -236,19 +240,19 @@ public class NonBlockingHashtable<TypeK, TypeV>
     return REPROBE_LIMIT + (len>>2);
   }
 
-  // --- NonBlockingHashtable --------------------------------------------------
+  // --- NonBlockingHashMap --------------------------------------------------
   // Constructors
 
-  /** Create a new NonBlockingHashtable with default minimum size (currently set
+  /** Create a new NonBlockingHashMap with default minimum size (currently set
    *  to 8 K/V pairs or roughly 84 bytes on a standard 32-bit JVM). */
-  public NonBlockingHashtable( ) { this(MIN_SIZE); }
+  public NonBlockingIdentityHashMap( ) { this(MIN_SIZE); }
 
-  /** Create a new NonBlockingHashtable with initial room for the given number of
+  /** Create a new NonBlockingHashMap with initial room for the given number of
    *  elements, thus avoiding internal resizing operations to reach an
    *  appropriate size.  Large numbers here when used with a small count of
    *  elements will sacrifice space for a small amount of time gained.  The
    *  initial size will be rounded up internally to the next larger power of 2. */
-  public NonBlockingHashtable( final int initial_sz ) { initialize(initial_sz); }
+  public NonBlockingIdentityHashMap( final int initial_sz ) { initialize(initial_sz); }
   private final void initialize( int initial_sz ) {
     if( initial_sz < 0 ) throw new IllegalArgumentException();
     int i;                      // Convert to next largest power-of-2
@@ -356,7 +360,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
   /** Removes all of the mappings from this map. */
   @Override
   public void clear() {         // Smack a new empty table down
-    Object[] newkvs = new NonBlockingHashtable(MIN_SIZE)._kvs;
+    Object[] newkvs = new NonBlockingIdentityHashMap(MIN_SIZE)._kvs;
     while( !CAS_kvs(_kvs,newkvs) ) // Spin until the clear works
       ;
   }
@@ -394,7 +398,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     try {
       // Must clone, to get the class right; NBHM might have been
       // extended so it would be wrong to just make a new NBHM.
-      NonBlockingHashtable<TypeK,TypeV> t = (NonBlockingHashtable<TypeK,TypeV>) super.clone();
+      NonBlockingIdentityHashMap<TypeK,TypeV> t = (NonBlockingIdentityHashMap<TypeK,TypeV>) super.clone();
       // But I don't have an atomic clone operation - the underlying _kvs
       // structure is undergoing rapid change.  If I just clone the _kvs
       // field, the CHM in _kvs[0] won't be in sync.
@@ -446,28 +450,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
     }
   }
 
-  // --- keyeq ---------------------------------------------------------------
-  // Check for key equality.  Try direct pointer compare first, then see if
-  // the hashes are unequal (fast negative test) and finally do the full-on
-  // 'equals' v-call.
-  private static boolean keyeq( Object K, Object key, int[] hashes, int hash, int fullhash ) {
-    return
-      K==key ||                 // Either keys match exactly OR
-      // hash exists and matches?  hash can be zero during the install of a
-      // new key/value pair.
-      ((hashes[hash] == 0 || hashes[hash] == fullhash) &&
-       // Do not call the users' "equals()" call with a Tombstone, as this can
-       // surprise poorly written "equals()" calls that throw exceptions
-       // instead of simply returning false.
-       K != TOMBSTONE &&        // Do not call users' equals call with a Tombstone
-       // Do the match the hard way - with the users' key being the loop-
-       // invariant "this" pointer.  I could have flipped the order of
-       // operands (since equals is commutative), but I'm making mega-morphic
-       // v-calls in a reprobing loop and nailing down the 'this' argument
-       // gives both the JIT and the hardware a chance to prefetch the call target.
-       key.equals(K));          // Finally do the hard match
-  }
-
   // --- get -----------------------------------------------------------------
   /** Returns the value to which the specified key is mapped, or {@code null}
    *  if this map contains no mapping for the key.
@@ -484,11 +466,10 @@ public class NonBlockingHashtable<TypeK, TypeV>
     return (TypeV)V;
   }
 
-  private static final Object get_impl( final NonBlockingHashtable topmap, final Object[] kvs, final Object key ) {
+  private static final Object get_impl( final NonBlockingIdentityHashMap topmap, final Object[] kvs, final Object key ) {
     final int fullhash= hash (key); // throws NullPointerException if key is null
     final int len     = len  (kvs); // Count of key/value pairs, reads kvs.length
     final CHM chm     = chm  (kvs); // The CHM, for a volatile read below; reads slot 0 of kvs
-    final int[] hashes=hashes(kvs); // The memoized hashes; reads slot 1 of kvs
 
     int idx = fullhash & (len-1); // First key hash
 
@@ -513,7 +494,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       final Object[] newkvs = chm._newkvs; // VOLATILE READ before key compare
 
       // Key-compare
-      if( keyeq(K,key,hashes,idx,fullhash) ) {
+      if( K == key ) {
         // Key hit!  Check for no table-copy-in-progress
         if( !(V instanceof Prime) ) // No copy?
           return (V == TOMBSTONE) ? null : V; // Return the value
@@ -538,14 +519,13 @@ public class NonBlockingHashtable<TypeK, TypeV>
   // assumed to work (although might have been immediately overwritten).  Only
   // the path through copy_slot passes in an expected value of null, and
   // putIfMatch only returns a null if passed in an expected null.
-  private static final Object putIfMatch( final NonBlockingHashtable topmap, final Object[] kvs, final Object key, final Object putval, final Object expVal ) {
+  private static final Object putIfMatch( final NonBlockingIdentityHashMap topmap, final Object[] kvs, final Object key, final Object putval, final Object expVal ) {
     assert putval != null;
     assert !(putval instanceof Prime);
     assert !(expVal instanceof Prime);
     final int fullhash = hash  (key); // throws NullPointerException if key null
     final int len      = len   (kvs); // Count of key/value pairs, reads kvs.length
     final CHM chm      = chm   (kvs); // Reads kvs[0]
-    final int[] hashes = hashes(kvs); // Reads kvs[1], read before kvs[0]
     int idx = fullhash & (len-1);
 
     // ---
@@ -563,7 +543,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
         // Claim the null key-slot
         if( CAS_key(kvs,idx, null, key ) ) { // Claim slot for Key
           chm._slots.add(1);      // Raise key-slots-used count
-          hashes[idx] = fullhash; // Memoize fullhash
           break;                  // Got it!
         }
         // CAS to claim the key-slot failed.
@@ -590,7 +569,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
       // Annoyingly this means we have to volatile-read before EACH key compare.
       newkvs = chm._newkvs;     // VOLATILE READ before key compare
 
-      if( keyeq(K,key,hashes,idx,fullhash) )
+      if( K == key )
         break;                  // Got it!
 
       // get and put must have the same key lookup logic!  Lest 'get' give
@@ -696,7 +675,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
 
 
   // --- CHM -----------------------------------------------------------------
-  // The control structure for the NonBlockingHashtable
+  // The control structure for the NonBlockingIdentityHashMap
   private static final class CHM<TypeK,TypeV> {
     // Size in active K,V pairs
     private final Counter _size;
@@ -778,7 +757,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // Since this routine has a fast cutout for copy-already-started, callers
     // MUST 'help_copy' lest we have a path which forever runs through
     // 'resize' only to discover a copy-in-progress which never progresses.
-    private final Object[] resize( NonBlockingHashtable topmap, Object[] kvs) {
+    private final Object[] resize( NonBlockingIdentityHashMap topmap, Object[] kvs) {
       assert chm(kvs) == this;
 
       // Check for resize already in progress, probably triggered by another thread
@@ -890,7 +869,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // Help along an existing resize operation.  We hope its the top-level
     // copy (it was when we started) but this CHM might have been promoted out
     // of the top position.
-    private final void help_copy_impl( NonBlockingHashtable topmap, Object[] oldkvs, boolean copy_all ) {
+    private final void help_copy_impl( NonBlockingIdentityHashMap topmap, Object[] oldkvs, boolean copy_all ) {
       assert chm(oldkvs) == this;
       Object[] newkvs = _newkvs;
       assert newkvs != null;    // Already checked by caller
@@ -954,7 +933,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // before any Prime appears.  So the caller needs to read the _newkvs
     // field to retry his operation in the new table, but probably has not
     // read it yet.
-    private final Object[] copy_slot_and_check( NonBlockingHashtable topmap, Object[] oldkvs, int idx, Object should_help ) {
+    private final Object[] copy_slot_and_check( NonBlockingIdentityHashMap topmap, Object[] oldkvs, int idx, Object should_help ) {
       assert chm(oldkvs) == this;
       Object[] newkvs = _newkvs; // VOLATILE READ
       // We're only here because the caller saw a Prime, which implies a
@@ -967,7 +946,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     }
 
     // --- copy_check_and_promote --------------------------------------------
-    private final void copy_check_and_promote( NonBlockingHashtable topmap, Object[] oldkvs, int workdone ) {
+    private final void copy_check_and_promote( NonBlockingIdentityHashMap topmap, Object[] oldkvs, int workdone ) {
       assert chm(oldkvs) == this;
       int oldlen = len(oldkvs);
       // We made a slot unusable and so did some of the needed copy work
@@ -1007,7 +986,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     // not-null must have been from a copy_slot (or other old-table overwrite)
     // and not from a thread directly writing in the new table.  Thus we can
     // count null-to-not-null transitions in the new table.
-    private boolean copy_slot( NonBlockingHashtable topmap, int idx, Object[] oldkvs, Object[] newkvs ) {
+    private boolean copy_slot( NonBlockingIdentityHashMap topmap, int idx, Object[] oldkvs, Object[] newkvs ) {
       // Blindly set the key slot from null to TOMBSTONE, to eagerly stop
       // fresh put's from inserting new values in the old table when the old
       // table is mid-resize.  We don't need to act on the results here,
@@ -1083,13 +1062,13 @@ public class NonBlockingHashtable<TypeK, TypeV>
         }
         // Table copy in-progress - so we cannot get a clean iteration.  We
         // must help finish the table copy before we can start iterating.
-        topchm.help_copy_impl(NonBlockingHashtable.this,topkvs,true);
+        topchm.help_copy_impl(NonBlockingIdentityHashMap.this,topkvs,true);
       }
       // Warm-up the iterator
       next();
     }
     int length() { return len(_sskvs); }
-    Object key(int idx) { return NonBlockingHashtable.key(_sskvs,idx); }
+    Object key(int idx) { return NonBlockingIdentityHashMap.key(_sskvs,idx); }
     private int _idx;              // Varies from 0-keys.length
     private Object _nextK, _prevK; // Last 2 keys found
     private TypeV  _nextV, _prevV; // Last 2 values found
@@ -1117,7 +1096,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
     }
     public void remove() {
       if( _prevV == null ) throw new IllegalStateException();
-      putIfMatch( NonBlockingHashtable.this, _sskvs, _prevK, TOMBSTONE, _prevV );
+      putIfMatch( NonBlockingIdentityHashMap.this, _sskvs, _prevK, TOMBSTONE, _prevV );
       _prevV = null;
     }
 
@@ -1147,9 +1126,9 @@ public class NonBlockingHashtable<TypeK, TypeV>
   @Override
   public Collection<TypeV> values() {
     return new AbstractCollection<TypeV>() {
-      @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear        ( ); }
-      @Override public int     size    (          ) { return NonBlockingHashtable.this.size         ( ); }
-      @Override public boolean contains( Object v ) { return NonBlockingHashtable.this.containsValue(v); }
+      @Override public void    clear   (          ) {        NonBlockingIdentityHashMap.this.clear        ( ); }
+      @Override public int     size    (          ) { return NonBlockingIdentityHashMap.this.size         ( ); }
+      @Override public boolean contains( Object v ) { return NonBlockingIdentityHashMap.this.containsValue(v); }
       @Override public Iterator<TypeV> iterator()   { return new SnapshotV(); }
     };
   }
@@ -1186,10 +1165,10 @@ public class NonBlockingHashtable<TypeK, TypeV>
   @Override
   public Set<TypeK> keySet() {
     return new AbstractSet<TypeK> () {
-      @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear   ( ); }
-      @Override public int     size    (          ) { return NonBlockingHashtable.this.size    ( ); }
-      @Override public boolean contains( Object k ) { return NonBlockingHashtable.this.containsKey(k); }
-      @Override public boolean remove  ( Object k ) { return NonBlockingHashtable.this.remove  (k) != null; }
+      @Override public void    clear   (          ) {        NonBlockingIdentityHashMap.this.clear   ( ); }
+      @Override public int     size    (          ) { return NonBlockingIdentityHashMap.this.size    ( ); }
+      @Override public boolean contains( Object k ) { return NonBlockingIdentityHashMap.this.containsKey(k); }
+      @Override public boolean remove  ( Object k ) { return NonBlockingIdentityHashMap.this.remove  (k) != null; }
       @Override public Iterator<TypeK> iterator()   { return new SnapshotK(); }
     };
   }
@@ -1230,7 +1209,7 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *
    *  <p><strong>Warning:</strong> the iterator associated with this Set
    *  requires the creation of {@link java.util.Map.Entry} objects with each
-   *  iteration.  The {@link NonBlockingHashtable} does not normally create or
+   *  iteration.  The {@link NonBlockingIdentityHashMap} does not normally create or
    *  using {@link java.util.Map.Entry} objects so they will be created soley
    *  to support this iteration.  Iterating using {@link #keySet} or {@link
    *  #values} will be more efficient.
@@ -1238,12 +1217,12 @@ public class NonBlockingHashtable<TypeK, TypeV>
   @Override
   public Set<Map.Entry<TypeK,TypeV>> entrySet() {
     return new AbstractSet<Map.Entry<TypeK,TypeV>>() {
-      @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear( ); }
-      @Override public int     size    (          ) { return NonBlockingHashtable.this.size ( ); }
+      @Override public void    clear   (          ) {        NonBlockingIdentityHashMap.this.clear( ); }
+      @Override public int     size    (          ) { return NonBlockingIdentityHashMap.this.size ( ); }
       @Override public boolean remove( final Object o ) {
         if( !(o instanceof Map.Entry)) return false;
         final Map.Entry<?,?> e = (Map.Entry<?,?>)o;
-        return NonBlockingHashtable.this.remove(e.getKey(), e.getValue());
+        return NonBlockingIdentityHashMap.this.remove(e.getKey(), e.getValue());
       }
       @Override public boolean contains(final Object o) {
         if( !(o instanceof Map.Entry)) return false;
@@ -1281,4 +1260,4 @@ public class NonBlockingHashtable<TypeK, TypeV>
     }
   }
 
-} // End NonBlockingHashtable class
+} // End NonBlockingIdentityHashMap class
