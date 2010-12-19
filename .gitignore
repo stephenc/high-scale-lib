@@ -2,7 +2,10 @@ target
 *.iml
 *.ipr
 *.iws
+<<<<<<< HEAD
 .classpath
 .project
 .settings
 
+=======
+>>>>>>> v1.1.0
