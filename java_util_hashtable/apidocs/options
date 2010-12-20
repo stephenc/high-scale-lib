@@ -1,5 +1,5 @@
 -classpath
-'/home/connollys/src/high-scale-lib/java_util_hashtable/target/classes:/home/connollys/src/high-scale-lib/high-scale-lib/target/high-scale-lib-1.1.2.jar'
+'/home/connollys/src/high-scale-lib/java_util_hashtable/target/classes:/home/connollys/.m2/repository/com/github/stephenc/high-scale-lib/high-scale-lib/1.1.2/high-scale-lib-1.1.2.jar'
 -encoding
 'UTF-8'
 -protected
