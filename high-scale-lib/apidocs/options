@@ -1,0 +1,26 @@
+-classpath
+'/home/connollys/src/high-scale-lib/high-scale-lib/target/classes'
+-encoding
+'UTF-8'
+-protected
+-sourcepath
+'/home/connollys/src/high-scale-lib/high-scale-lib/src/main/java'
+-author
+-bottom
+'Copyright &#169; 2010. All Rights Reserved.'
+-charset
+'UTF-8'
+-d
+'/home/connollys/src/high-scale-lib/high-scale-lib/target/site/apidocs'
+-docencoding
+'UTF-8'
+-doctitle
+'Highly Scalable Java 1.1.1-SNAPSHOT API'
+-linkoffline
+'http://stephenc.github.com/high-scale-lib/java_util_hashtable/apidocs' '/home/connollys/src/high-scale-lib/java_util_hashtable/target/site/apidocs'
+-linkoffline
+'http://stephenc.github.com/high-scale-lib/java_util_concurrent_chm/apidocs' '/home/connollys/src/high-scale-lib/java_util_concurrent_chm/target/site/apidocs'
+-use
+-version
+-windowtitle
+'Highly Scalable Java 1.1.1-SNAPSHOT API'

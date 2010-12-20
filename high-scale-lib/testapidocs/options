@@ -1,0 +1,22 @@
+-classpath
+'/home/connollys/src/high-scale-lib/high-scale-lib/target/classes:/home/connollys/src/high-scale-lib/high-scale-lib/target/test-classes:/home/connollys/.m2/repository/junit/junit/4.4/junit-4.4.jar'
+-encoding
+'UTF-8'
+-protected
+-sourcepath
+'/home/connollys/src/high-scale-lib/high-scale-lib/src/test/java'
+-author
+-bottom
+'Copyright &#169; 2010. All Rights Reserved.'
+-charset
+'UTF-8'
+-d
+'/home/connollys/src/high-scale-lib/high-scale-lib/target/site/testapidocs'
+-docencoding
+'UTF-8'
+-doctitle
+'Highly Scalable Java 1.1.1-SNAPSHOT Test API'
+-use
+-version
+-windowtitle
+'Highly Scalable Java 1.1.1-SNAPSHOT Test API'

@@ -1,0 +1,53 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+<title>Counter xref</title>
+<link type="text/css" rel="stylesheet" href="../../../stylesheet.css" />
+</head>
+<body>
+<div id="overview"><a href="../../../../apidocs/org/cliffc/high_scale_lib/Counter.html">View Javadoc</a></div><pre>
+
+<a class="jxr_linenumber" name="1" href="#1">1</a>   <em class="jxr_comment">/*</em>
+<a class="jxr_linenumber" name="2" href="#2">2</a>   <em class="jxr_comment"> * Written by Cliff Click and released to the public domain, as explained at</em>
+<a class="jxr_linenumber" name="3" href="#3">3</a>   <em class="jxr_comment"> * <a href="http://creativecommons.org/licenses/publicdomain" target="alexandria_uri">http://creativecommons.org/licenses/publicdomain</a></em>
+<a class="jxr_linenumber" name="4" href="#4">4</a>   <em class="jxr_comment"> */</em>
+<a class="jxr_linenumber" name="5" href="#5">5</a>   
+<a class="jxr_linenumber" name="6" href="#6">6</a>   <strong class="jxr_keyword">package</strong> org.cliffc.high_scale_lib;
+<a class="jxr_linenumber" name="7" href="#7">7</a>   
+<a class="jxr_linenumber" name="8" href="#8">8</a>   <em class="jxr_javadoccomment">/**</em>
+<a class="jxr_linenumber" name="9" href="#9">9</a>   <em class="jxr_javadoccomment"> * A simple high-performance counter.  Merely renames the extended {@link</em>
+<a class="jxr_linenumber" name="10" href="#10">10</a>  <em class="jxr_javadoccomment"> * org.cliffc.high_scale_lib.ConcurrentAutoTable} class to be more obvious.</em>
+<a class="jxr_linenumber" name="11" href="#11">11</a>  <em class="jxr_javadoccomment"> * {@link org.cliffc.high_scale_lib.ConcurrentAutoTable} already has a decent</em>
+<a class="jxr_linenumber" name="12" href="#12">12</a>  <em class="jxr_javadoccomment"> * counting API.</em>
+<a class="jxr_linenumber" name="13" href="#13">13</a>  <em class="jxr_javadoccomment"> *</em>
+<a class="jxr_linenumber" name="14" href="#14">14</a>  <em class="jxr_javadoccomment"> * @since 1.5</em>
+<a class="jxr_linenumber" name="15" href="#15">15</a>  <em class="jxr_javadoccomment"> * @author Cliff Click</em>
+<a class="jxr_linenumber" name="16" href="#16">16</a>  <em class="jxr_javadoccomment"> */</em>
+<a class="jxr_linenumber" name="17" href="#17">17</a>  
+<a class="jxr_linenumber" name="18" href="#18">18</a>  <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">class</strong> <a href="../../../org/cliffc/high_scale_lib/Counter.html">Counter</a> <strong class="jxr_keyword">extends</strong> <a href="../../../org/cliffc/high_scale_lib/ConcurrentAutoTable.html">ConcurrentAutoTable</a> {
+<a class="jxr_linenumber" name="19" href="#19">19</a>  
+<a class="jxr_linenumber" name="20" href="#20">20</a>    <em class="jxr_comment">// Add the given value to current counter value.  Concurrent updates will</em>
+<a class="jxr_linenumber" name="21" href="#21">21</a>    <em class="jxr_comment">// not be lost, but addAndGet or getAndAdd are not implemented because but</em>
+<a class="jxr_linenumber" name="22" href="#22">22</a>    <em class="jxr_comment">// the total counter value is not atomically updated.</em>
+<a class="jxr_linenumber" name="23" href="#23">23</a>    <em class="jxr_comment">//public void add( long x );</em>
+<a class="jxr_linenumber" name="24" href="#24">24</a>    <em class="jxr_comment">//public void decrement();</em>
+<a class="jxr_linenumber" name="25" href="#25">25</a>    <em class="jxr_comment">//public void increment();</em>
+<a class="jxr_linenumber" name="26" href="#26">26</a>  
+<a class="jxr_linenumber" name="27" href="#27">27</a>    <em class="jxr_comment">// Current value of the counter.  Since other threads are updating furiously</em>
+<a class="jxr_linenumber" name="28" href="#28">28</a>    <em class="jxr_comment">// the value is only approximate, but it includes all counts made by the</em>
+<a class="jxr_linenumber" name="29" href="#29">29</a>    <em class="jxr_comment">// current thread.  Requires a pass over all the striped counters.</em>
+<a class="jxr_linenumber" name="30" href="#30">30</a>    <em class="jxr_comment">//public long get();</em>
+<a class="jxr_linenumber" name="31" href="#31">31</a>    <em class="jxr_comment">//public int  intValue();</em>
+<a class="jxr_linenumber" name="32" href="#32">32</a>    <em class="jxr_comment">//public long longValue();</em>
+<a class="jxr_linenumber" name="33" href="#33">33</a>  
+<a class="jxr_linenumber" name="34" href="#34">34</a>    <em class="jxr_comment">// A cheaper 'get'.  Updated only once/millisecond, but fast as a simple</em>
+<a class="jxr_linenumber" name="35" href="#35">35</a>    <em class="jxr_comment">// load instruction when not updating.</em>
+<a class="jxr_linenumber" name="36" href="#36">36</a>    <em class="jxr_comment">//public long estimate_get( );</em>
+<a class="jxr_linenumber" name="37" href="#37">37</a>  
+<a class="jxr_linenumber" name="38" href="#38">38</a>  }
+<a class="jxr_linenumber" name="39" href="#39">39</a>  
+</pre>
+<hr/><div id="footer">This page was automatically generated by <a href="http://maven.apache.org/">Maven</a></div></body>
+</html>
+

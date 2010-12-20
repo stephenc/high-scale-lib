@@ -1,0 +1,681 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+<title>NBHM_Tester xref</title>
+<link type="text/css" rel="stylesheet" href="../stylesheet.css" />
+</head>
+<body>
+<div id="overview"><a href="../../testapidocs//NBHM_Tester.html">View Javadoc</a></div><pre>
+
+<a class="jxr_linenumber" name="1" href="#1">1</a>   <em class="jxr_comment">// A Java Program to more formally test the ideas in my Non-Blocking-Hash-Map</em>
+<a class="jxr_linenumber" name="2" href="#2">2</a>   
+<a class="jxr_linenumber" name="3" href="#3">3</a>   <strong class="jxr_keyword">import</strong> java.util.*;
+<a class="jxr_linenumber" name="4" href="#4">4</a>   <strong class="jxr_keyword">import</strong> java.util.concurrent.*;
+<a class="jxr_linenumber" name="5" href="#5">5</a>   
+<a class="jxr_linenumber" name="6" href="#6">6</a>   <strong class="jxr_keyword">class</strong> NBHM_Tester {
+<a class="jxr_linenumber" name="7" href="#7">7</a>     <em class="jxr_comment">// Set of States for an individual State Machine.</em>
+<a class="jxr_linenumber" name="8" href="#8">8</a>     <em class="jxr_comment">// Each State is really a pair of memory words.</em>
+<a class="jxr_linenumber" name="9" href="#9">9</a>     <em class="jxr_comment">// The first word is only 0, K, X; the 2nd word is only 0, A/a, B/b, _ or x.</em>
+<a class="jxr_linenumber" name="10" href="#10">10</a>    enum <a href="..//NBHM_Tester.html">S</a> {                      <em class="jxr_comment">// States</em>
+<a class="jxr_linenumber" name="11" href="#11">11</a>      BAD      (0),
+<a class="jxr_linenumber" name="12" href="#12">12</a>      MT       (1),		<em class="jxr_comment">// No Key, No Value</em>
+<a class="jxr_linenumber" name="13" href="#13">13</a>      X0       (2),		<em class="jxr_comment">// Key is X'd out (slot is dead, nothing to copy)</em>
+<a class="jxr_linenumber" name="14" href="#14">14</a>      K0       (3),		<em class="jxr_comment">// Key only, Value is NULL </em>
+<a class="jxr_linenumber" name="15" href="#15">15</a>      KA       (4),		<em class="jxr_comment">// Key/Value-A  pair</em>
+<a class="jxr_linenumber" name="16" href="#16">16</a>      Ka       (5),		<em class="jxr_comment">// Key/Value-A' pair</em>
+<a class="jxr_linenumber" name="17" href="#17">17</a>      KB       (6),		<em class="jxr_comment">// Key/Value-B  pair</em>
+<a class="jxr_linenumber" name="18" href="#18">18</a>      Kb       (7),		<em class="jxr_comment">// Key/Value-B' pair</em>
+<a class="jxr_linenumber" name="19" href="#19">19</a>      K_       (8),		<em class="jxr_comment">// Key/Tombstone - deleted</em>
+<a class="jxr_linenumber" name="20" href="#20">20</a>      KX       (9);		<em class="jxr_comment">// Key/X pair - copied</em>
+<a class="jxr_linenumber" name="21" href="#21">21</a>  
+<a class="jxr_linenumber" name="22" href="#22">22</a>      <em class="jxr_comment">// A field to let me cheapo map to integers</em>
+<a class="jxr_linenumber" name="23" href="#23">23</a>      <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> _idx;
+<a class="jxr_linenumber" name="24" href="#24">24</a>      <a href="..//NBHM_Tester.html">S</a>(<strong class="jxr_keyword">int</strong> idx) { _idx=idx; }
+<a class="jxr_linenumber" name="25" href="#25">25</a>      <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> MAX = values().length;
+<a class="jxr_linenumber" name="26" href="#26">26</a>  
+<a class="jxr_linenumber" name="27" href="#27">27</a>      <em class="jxr_comment">// --- compute_reached ---------------------------------------------------</em>
+<a class="jxr_linenumber" name="28" href="#28">28</a>      <em class="jxr_comment">// Used to test sanity of the allowed-transitions</em>
+<a class="jxr_linenumber" name="29" href="#29">29</a>      <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">void</strong> compute_reached(<strong class="jxr_keyword">boolean</strong> [] reached) {
+<a class="jxr_linenumber" name="30" href="#30">30</a>        <strong class="jxr_keyword">if</strong>( reached[_idx] ) <strong class="jxr_keyword">return</strong>; <em class="jxr_comment">// Already reached this state</em>
+<a class="jxr_linenumber" name="31" href="#31">31</a>        reached[_idx] = <strong class="jxr_keyword">true</strong>;	  <em class="jxr_comment">// First time reached this state</em>
+<a class="jxr_linenumber" name="32" href="#32">32</a>        <a href="..//NBHM_Tester.html">S</a>[] T = _allowed_transitions; <em class="jxr_comment">// Short handy name</em>
+<a class="jxr_linenumber" name="33" href="#33">33</a>        <em class="jxr_comment">// Visit all transitions...</em>
+<a class="jxr_linenumber" name="34" href="#34">34</a>        <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;T.length; i+= 2 )
+<a class="jxr_linenumber" name="35" href="#35">35</a>  	<strong class="jxr_keyword">if</strong>( T[i] == <strong class="jxr_keyword">this</strong> ) <em class="jxr_comment">// If see a transition starting from this state</em>
+<a class="jxr_linenumber" name="36" href="#36">36</a>  	  T[i+1].compute_reached(reached); <em class="jxr_comment">// compute reaching from here</em>
+<a class="jxr_linenumber" name="37" href="#37">37</a>      }
+<a class="jxr_linenumber" name="38" href="#38">38</a>  
+<a class="jxr_linenumber" name="39" href="#39">39</a>      <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <a href="..//NBHM_Tester.html">S</a> [] _prime = {
+<a class="jxr_linenumber" name="40" href="#40">40</a>        BAD,BAD,BAD,BAD,
+<a class="jxr_linenumber" name="41" href="#41">41</a>        Ka,KA,Kb,KB,
+<a class="jxr_linenumber" name="42" href="#42">42</a>        BAD,BAD
+<a class="jxr_linenumber" name="43" href="#43">43</a>      };
+<a class="jxr_linenumber" name="44" href="#44">44</a>      <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">S</a> prime() { <strong class="jxr_keyword">return</strong> _prime[_idx]; }
+<a class="jxr_linenumber" name="45" href="#45">45</a>    };
+<a class="jxr_linenumber" name="46" href="#46">46</a>    
+<a class="jxr_linenumber" name="47" href="#47">47</a>    <em class="jxr_comment">// List of allowed-transitions as S-pairs</em>
+<a class="jxr_linenumber" name="48" href="#48">48</a>    <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <a href="..//NBHM_Tester.html">S</a>[] _allowed_transitions = {
+<a class="jxr_linenumber" name="49" href="#49">49</a>      S.BAD, S.MT,                <em class="jxr_comment">// Bogus starting transition</em>
+<a class="jxr_linenumber" name="50" href="#50">50</a>      S.MT, S.X0,			<em class="jxr_comment">// Empty -&gt; dead_slot</em>
+<a class="jxr_linenumber" name="51" href="#51">51</a>      S.MT, S.K0,			<em class="jxr_comment">// Empty -&gt; Key insertion</em>
+<a class="jxr_linenumber" name="52" href="#52">52</a>  
+<a class="jxr_linenumber" name="53" href="#53">53</a>      S.K0, S.KA,			<em class="jxr_comment">// Key   -&gt; Key/A  pair</em>
+<a class="jxr_linenumber" name="54" href="#54">54</a>      S.K0, S.Ka,			<em class="jxr_comment">// Key   -&gt; Key/A' pair</em>
+<a class="jxr_linenumber" name="55" href="#55">55</a>      S.K0, S.KB,			<em class="jxr_comment">// Key   -&gt; Key/B  pair</em>
+<a class="jxr_linenumber" name="56" href="#56">56</a>      S.K0, S.Kb,			<em class="jxr_comment">// Key   -&gt; Key/B' pair</em>
+<a class="jxr_linenumber" name="57" href="#57">57</a>      S.K0, S.K_,			<em class="jxr_comment">// Key   -&gt; deleted</em>
+<a class="jxr_linenumber" name="58" href="#58">58</a>  
+<a class="jxr_linenumber" name="59" href="#59">59</a>      S.KA, S.KB,			<em class="jxr_comment">// Key/A -&gt; Key/B</em>
+<a class="jxr_linenumber" name="60" href="#60">60</a>      S.KA, S.K_,			<em class="jxr_comment">// Key/A -&gt; deleted</em>
+<a class="jxr_linenumber" name="61" href="#61">61</a>  
+<a class="jxr_linenumber" name="62" href="#62">62</a>      S.KB, S.KA,			<em class="jxr_comment">// Key/B -&gt; Key/A</em>
+<a class="jxr_linenumber" name="63" href="#63">63</a>      S.KB, S.K_,			<em class="jxr_comment">// Key/B -&gt; deleted</em>
+<a class="jxr_linenumber" name="64" href="#64">64</a>  
+<a class="jxr_linenumber" name="65" href="#65">65</a>      S.K_, S.KA,			<em class="jxr_comment">// deleted -&gt; Key/A</em>
+<a class="jxr_linenumber" name="66" href="#66">66</a>      S.K_, S.KB,			<em class="jxr_comment">// deleted -&gt; Key/B</em>
+<a class="jxr_linenumber" name="67" href="#67">67</a>  
+<a class="jxr_linenumber" name="68" href="#68">68</a>      S.Ka, S.KA,			<em class="jxr_comment">// Key/A' -&gt; Key/A (strip prime)</em>
+<a class="jxr_linenumber" name="69" href="#69">69</a>      S.Ka, S.Kb,			<em class="jxr_comment">// Key/A' -&gt; Key/B'</em>
+<a class="jxr_linenumber" name="70" href="#70">70</a>      S.Ka, S.K0,			<em class="jxr_comment">// Key/A' -&gt; Key alone (same as deleted-prime)</em>
+<a class="jxr_linenumber" name="71" href="#71">71</a>      S.Ka, S.KB,			<em class="jxr_comment">// Key/A' -&gt; Key/B (last write overrides copy)</em>
+<a class="jxr_linenumber" name="72" href="#72">72</a>      S.Ka, S.K_,			<em class="jxr_comment">// Key/A' -&gt; Key delete</em>
+<a class="jxr_linenumber" name="73" href="#73">73</a>  
+<a class="jxr_linenumber" name="74" href="#74">74</a>      S.Kb, S.KB,			<em class="jxr_comment">// Key/B' -&gt; Key/B (strip prime)</em>
+<a class="jxr_linenumber" name="75" href="#75">75</a>      S.Kb, S.Ka,			<em class="jxr_comment">// Key/B' -&gt; Key/A'</em>
+<a class="jxr_linenumber" name="76" href="#76">76</a>      S.Kb, S.K0,			<em class="jxr_comment">// Key/B' -&gt; Key alone (same as deleted-prime)</em>
+<a class="jxr_linenumber" name="77" href="#77">77</a>      S.Kb, S.KA,			<em class="jxr_comment">// Key/B' -&gt; Key/A (last write overrides copy)</em>
+<a class="jxr_linenumber" name="78" href="#78">78</a>      S.Kb, S.K_,			<em class="jxr_comment">// Key/B' -&gt; Key delete</em>
+<a class="jxr_linenumber" name="79" href="#79">79</a>  
+<a class="jxr_linenumber" name="80" href="#80">80</a>      S.K0, S.KX,			<em class="jxr_comment">// Key   -&gt; copied</em>
+<a class="jxr_linenumber" name="81" href="#81">81</a>      S.KA, S.KX,			<em class="jxr_comment">// Key/A -&gt; copied</em>
+<a class="jxr_linenumber" name="82" href="#82">82</a>      S.KB, S.KX,			<em class="jxr_comment">// Key/B -&gt; copied</em>
+<a class="jxr_linenumber" name="83" href="#83">83</a>      S.K_, S.KX,			<em class="jxr_comment">// deleted -&gt; copied</em>
+<a class="jxr_linenumber" name="84" href="#84">84</a>  
+<a class="jxr_linenumber" name="85" href="#85">85</a>      <strong class="jxr_keyword">null</strong>
+<a class="jxr_linenumber" name="86" href="#86">86</a>    };
+<a class="jxr_linenumber" name="87" href="#87">87</a>    <em class="jxr_comment">// power-of-2 larger than _allowed_transitions.length</em>
+<a class="jxr_linenumber" name="88" href="#88">88</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> LOG2TRAN = 6;
+<a class="jxr_linenumber" name="89" href="#89">89</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> MAXTRAN = 1&lt;&lt;LOG2TRAN;
+<a class="jxr_linenumber" name="90" href="#90">90</a>  
+<a class="jxr_linenumber" name="91" href="#91">91</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong>[][] fill_state_machine() {
+<a class="jxr_linenumber" name="92" href="#92">92</a>      <strong class="jxr_keyword">int</strong> [][] sm = <strong class="jxr_keyword">new</strong> <strong class="jxr_keyword">int</strong>[S.MAX][S.MAX];
+<a class="jxr_linenumber" name="93" href="#93">93</a>      <a href="..//NBHM_Tester.html">S</a>[] T = _allowed_transitions; <em class="jxr_comment">// Short handy name</em>
+<a class="jxr_linenumber" name="94" href="#94">94</a>      <em class="jxr_comment">// Visit all transitions...</em>
+<a class="jxr_linenumber" name="95" href="#95">95</a>      <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=2; i&lt;T.length-1; i+= 2 )
+<a class="jxr_linenumber" name="96" href="#96">96</a>        sm[T[i+0]._idx][T[i+1]._idx] = i;
+<a class="jxr_linenumber" name="97" href="#97">97</a>      <strong class="jxr_keyword">return</strong> sm;
+<a class="jxr_linenumber" name="98" href="#98">98</a>    }
+<a class="jxr_linenumber" name="99" href="#99">99</a>    <em class="jxr_comment">// Array of allowed transitions</em>
+<a class="jxr_linenumber" name="100" href="#100">100</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong>[][] _state_machine = fill_state_machine();
+<a class="jxr_linenumber" name="101" href="#101">101</a>   <em class="jxr_comment">// Is this transition allowed as part of the state-machine?</em>
+<a class="jxr_linenumber" name="102" href="#102">102</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> is_SM(<a href="..//NBHM_Tester.html">S</a> x,S y) { <strong class="jxr_keyword">return</strong> _state_machine[x._idx][y._idx]; }
+<a class="jxr_linenumber" name="103" href="#103">103</a> 
+<a class="jxr_linenumber" name="104" href="#104">104</a> 
+<a class="jxr_linenumber" name="105" href="#105">105</a>   <em class="jxr_comment">// --- Thrd ----------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="106" href="#106">106</a>   <em class="jxr_comment">// Notion of an action performed by a single thread, such as 'put(K,A)' or</em>
+<a class="jxr_linenumber" name="107" href="#107">107</a>   <em class="jxr_comment">// 'delete(K)' - always with respect to key K.  This action will turn into a</em>
+<a class="jxr_linenumber" name="108" href="#108">108</a>   <em class="jxr_comment">// series of state-machine transitions (or perhaps a request to move to a</em>
+<a class="jxr_linenumber" name="109" href="#109">109</a>   <em class="jxr_comment">// newer state machine) or </em>
+<a class="jxr_linenumber" name="110" href="#110">110</a> 
+<a class="jxr_linenumber" name="111" href="#111">111</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">abstract</strong> <strong class="jxr_keyword">class</strong> <a href="..//NBHM_Tester.html">Thrd</a> {
+<a class="jxr_linenumber" name="112" href="#112">112</a>     <strong class="jxr_keyword">final</strong> String _name;		<em class="jxr_comment">// Nice thread name</em>
+<a class="jxr_linenumber" name="113" href="#113">113</a>     <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> _tid;		<em class="jxr_comment">// This thread index; invariant: _Thrds[_tid]==this</em>
+<a class="jxr_linenumber" name="114" href="#114">114</a>     <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">boolean</strong> _ordered[];	<em class="jxr_comment">// This thread is ordered after what other threads?</em>
+<a class="jxr_linenumber" name="115" href="#115">115</a>     <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">int</strong> _tids;		<em class="jxr_comment">// Max number of threads</em>
+<a class="jxr_linenumber" name="116" href="#116">116</a>     <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <a href="..//NBHM_Tester.html">Thrd</a>[] _thrds = <strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Thrd</a>[10]; <em class="jxr_comment">// Array of them</em>
+<a class="jxr_linenumber" name="117" href="#117">117</a>     <em class="jxr_comment">// Thread that can begin at any time</em>
+<a class="jxr_linenumber" name="118" href="#118">118</a>     <a href="..//NBHM_Tester.html">Thrd</a>( String name ) { 
+<a class="jxr_linenumber" name="119" href="#119">119</a>       _tid = _tids++; 
+<a class="jxr_linenumber" name="120" href="#120">120</a>       _name = name; 
+<a class="jxr_linenumber" name="121" href="#121">121</a>       _thrds[_tid] = <strong class="jxr_keyword">this</strong>; 
+<a class="jxr_linenumber" name="122" href="#122">122</a>       _ordered = <strong class="jxr_keyword">null</strong>;          <em class="jxr_comment">// shortcut for un-ordered</em>
+<a class="jxr_linenumber" name="123" href="#123">123</a>     }
+<a class="jxr_linenumber" name="124" href="#124">124</a>     <em class="jxr_comment">// Thread that must wait until thread t0 has seen 'at_goal'</em>
+<a class="jxr_linenumber" name="125" href="#125">125</a>     <a href="..//NBHM_Tester.html">Thrd</a>( String name, Thrd t0 ) { 
+<a class="jxr_linenumber" name="126" href="#126">126</a>       _tid = _tids++; 
+<a class="jxr_linenumber" name="127" href="#127">127</a>       _name = name; 
+<a class="jxr_linenumber" name="128" href="#128">128</a>       _thrds[_tid] = <strong class="jxr_keyword">this</strong>; 
+<a class="jxr_linenumber" name="129" href="#129">129</a>       _ordered = <strong class="jxr_keyword">new</strong> <strong class="jxr_keyword">boolean</strong>[_thrds.length];
+<a class="jxr_linenumber" name="130" href="#130">130</a>       _ordered[t0._tid] = <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="131" href="#131">131</a>     }
+<a class="jxr_linenumber" name="132" href="#132">132</a>     <em class="jxr_comment">// Thread that must wait until threads t0 and t1 have seen 'at_goal'</em>
+<a class="jxr_linenumber" name="133" href="#133">133</a>     <a href="..//NBHM_Tester.html">Thrd</a>( String name, Thrd t0, Thrd t1 ) { 
+<a class="jxr_linenumber" name="134" href="#134">134</a>       _tid = _tids++; 
+<a class="jxr_linenumber" name="135" href="#135">135</a>       _name = name; 
+<a class="jxr_linenumber" name="136" href="#136">136</a>       _thrds[_tid] = <strong class="jxr_keyword">this</strong>; 
+<a class="jxr_linenumber" name="137" href="#137">137</a>       _ordered = <strong class="jxr_keyword">new</strong> <strong class="jxr_keyword">boolean</strong>[_thrds.length];
+<a class="jxr_linenumber" name="138" href="#138">138</a>       _ordered[t0._tid] = <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="139" href="#139">139</a>       _ordered[t1._tid] = <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="140" href="#140">140</a>     }
+<a class="jxr_linenumber" name="141" href="#141">141</a> 
+<a class="jxr_linenumber" name="142" href="#142">142</a>     <em class="jxr_comment">//abstract History step(History h);</em>
+<a class="jxr_linenumber" name="143" href="#143">143</a>     <em class="jxr_comment">//abstract boolean at_goal(History h);</em>
+<a class="jxr_linenumber" name="144" href="#144">144</a>     <strong class="jxr_keyword">public</strong> String toString() { <strong class="jxr_keyword">return</strong> _name; }
+<a class="jxr_linenumber" name="145" href="#145">145</a>     <em class="jxr_comment">// threads cannot start until prior-ordered-threads finish.</em>
+<a class="jxr_linenumber" name="146" href="#146">146</a>     <em class="jxr_comment">// passed in an array of active Thrds (or NULL)</em>
+<a class="jxr_linenumber" name="147" href="#147">147</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">boolean</strong> can_start( Thrd[] thrds ) {
+<a class="jxr_linenumber" name="148" href="#148">148</a>       <strong class="jxr_keyword">if</strong>( _ordered == <strong class="jxr_keyword">null</strong> ) <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="149" href="#149">149</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;thrds.length; i++ )
+<a class="jxr_linenumber" name="150" href="#150">150</a>         <strong class="jxr_keyword">if</strong>( thrds[i] != <strong class="jxr_keyword">null</strong> &amp;&amp; _ordered[thrds[i]._tid] )
+<a class="jxr_linenumber" name="151" href="#151">151</a>           <strong class="jxr_keyword">return</strong> false;
+<a class="jxr_linenumber" name="152" href="#152">152</a>       <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="153" href="#153">153</a>     }
+<a class="jxr_linenumber" name="154" href="#154">154</a> 
+<a class="jxr_linenumber" name="155" href="#155">155</a>     <strong class="jxr_keyword">abstract</strong> <strong class="jxr_keyword">boolean</strong> at_goal(<a href="..//NBHM_Tester.html">History</a> h);
+<a class="jxr_linenumber" name="156" href="#156">156</a>     <strong class="jxr_keyword">abstract</strong> <a href="..//NBHM_Tester.html">History</a> step( History h );
+<a class="jxr_linenumber" name="157" href="#157">157</a>   }
+<a class="jxr_linenumber" name="158" href="#158">158</a> 
+<a class="jxr_linenumber" name="159" href="#159">159</a>   <em class="jxr_comment">// --- Thrd_A --------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="160" href="#160">160</a>   <em class="jxr_comment">// A Thrd class to do a 'put(A)'</em>
+<a class="jxr_linenumber" name="161" href="#161">161</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">class</strong> Thrd_A <strong class="jxr_keyword">extends</strong> <a href="..//NBHM_Tester.html">Thrd</a> {
+<a class="jxr_linenumber" name="162" href="#162">162</a>     Thrd_A( String n ) { <strong class="jxr_keyword">super</strong>(n); }
+<a class="jxr_linenumber" name="163" href="#163">163</a>     Thrd_A( String n, Thrd t0 ) { <strong class="jxr_keyword">super</strong>(n,t0); }
+<a class="jxr_linenumber" name="164" href="#164">164</a>     Thrd_A( String n, Thrd t0, Thrd t1 ) { <strong class="jxr_keyword">super</strong>(n,t0,t1); }
+<a class="jxr_linenumber" name="165" href="#165">165</a>     <a href="..//NBHM_Tester.html">History</a> step( History h ) {
+<a class="jxr_linenumber" name="166" href="#166">166</a>       <strong class="jxr_keyword">return</strong> step_impl(h,false,h._old);
+<a class="jxr_linenumber" name="167" href="#167">167</a>     }
+<a class="jxr_linenumber" name="168" href="#168">168</a>     <a href="..//NBHM_Tester.html">History</a> step_impl( History h, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong>, S x ) {
+<a class="jxr_linenumber" name="169" href="#169">169</a>       <strong class="jxr_keyword">int</strong> tran = 0;
+<a class="jxr_linenumber" name="170" href="#170">170</a>       <strong class="jxr_keyword">switch</strong>( x ) {
+<a class="jxr_linenumber" name="171" href="#171">171</a>       <strong class="jxr_keyword">case</strong> MT: tran = is_SM(x,S.K0); <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="172" href="#172">172</a>       <strong class="jxr_keyword">case</strong> K0: 
+<a class="jxr_linenumber" name="173" href="#173">173</a>       <strong class="jxr_keyword">case</strong> Ka:
+<a class="jxr_linenumber" name="174" href="#174">174</a>       <strong class="jxr_keyword">case</strong> KB: 
+<a class="jxr_linenumber" name="175" href="#175">175</a>       <strong class="jxr_keyword">case</strong> Kb: 
+<a class="jxr_linenumber" name="176" href="#176">176</a>       <strong class="jxr_keyword">case</strong> K_: tran = is_SM(x,S.KA); <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="177" href="#177">177</a>       <strong class="jxr_keyword">case</strong> X0:
+<a class="jxr_linenumber" name="178" href="#178">178</a>       <strong class="jxr_keyword">case</strong> KX: <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong>,h._<strong class="jxr_keyword">new</strong>); <em class="jxr_comment">// try again in new table</em>
+<a class="jxr_linenumber" name="179" href="#179">179</a>       <strong class="jxr_keyword">default</strong>: 
+<a class="jxr_linenumber" name="180" href="#180">180</a> 	assert !at_goal(h) : <span class="jxr_string">"why you asking for a step when at_goal?"</span>;
+<a class="jxr_linenumber" name="181" href="#181">181</a> 	<strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> Error(<span class="jxr_string">"Unimplemented "</span>+x);
+<a class="jxr_linenumber" name="182" href="#182">182</a>       }
+<a class="jxr_linenumber" name="183" href="#183">183</a>       assert tran != 0 : <span class="jxr_string">"broken step function from "</span>+x;
+<a class="jxr_linenumber" name="184" href="#184">184</a>       <strong class="jxr_keyword">return</strong> h.make(<strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>( x, old_or_<strong class="jxr_keyword">new</strong>, tran ),<strong class="jxr_keyword">this</strong>);
+<a class="jxr_linenumber" name="185" href="#185">185</a>     }
+<a class="jxr_linenumber" name="186" href="#186">186</a> 
+<a class="jxr_linenumber" name="187" href="#187">187</a>     <strong class="jxr_keyword">boolean</strong> at_goal(<a href="..//NBHM_Tester.html">History</a> h) {
+<a class="jxr_linenumber" name="188" href="#188">188</a>       <strong class="jxr_keyword">return</strong> 
+<a class="jxr_linenumber" name="189" href="#189">189</a>         (h._old == S.KA) ||	<em class="jxr_comment">// Old is KA OR</em>
+<a class="jxr_linenumber" name="190" href="#190">190</a>         (h._<strong class="jxr_keyword">new</strong> == S.KA &amp;&amp;	<em class="jxr_comment">// And new is KA</em>
+<a class="jxr_linenumber" name="191" href="#191">191</a>          h.old_is_dead());      <em class="jxr_comment">// Signaled to new table</em>
+<a class="jxr_linenumber" name="192" href="#192">192</a>     }
+<a class="jxr_linenumber" name="193" href="#193">193</a>   }
+<a class="jxr_linenumber" name="194" href="#194">194</a> 
+<a class="jxr_linenumber" name="195" href="#195">195</a>   <em class="jxr_comment">// --- Thrd_B --------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="196" href="#196">196</a>   <em class="jxr_comment">// A Thrd class to do a 'put(B)'</em>
+<a class="jxr_linenumber" name="197" href="#197">197</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">class</strong> Thrd_B <strong class="jxr_keyword">extends</strong> <a href="..//NBHM_Tester.html">Thrd</a> {
+<a class="jxr_linenumber" name="198" href="#198">198</a>     Thrd_B( String n ) { <strong class="jxr_keyword">super</strong>(n); }
+<a class="jxr_linenumber" name="199" href="#199">199</a>     Thrd_B( String n, Thrd t0 ) { <strong class="jxr_keyword">super</strong>(n,t0); }
+<a class="jxr_linenumber" name="200" href="#200">200</a>     Thrd_B( String n, Thrd t0, Thrd t1 ) { <strong class="jxr_keyword">super</strong>(n,t0,t1); }
+<a class="jxr_linenumber" name="201" href="#201">201</a>     <a href="..//NBHM_Tester.html">History</a> step( History h ) {
+<a class="jxr_linenumber" name="202" href="#202">202</a>       <strong class="jxr_keyword">return</strong> step_impl(h,false,h._old);
+<a class="jxr_linenumber" name="203" href="#203">203</a>     }
+<a class="jxr_linenumber" name="204" href="#204">204</a>     <a href="..//NBHM_Tester.html">History</a> step_impl( History h, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong>, S x ) {
+<a class="jxr_linenumber" name="205" href="#205">205</a>       <strong class="jxr_keyword">int</strong> tran = 0;
+<a class="jxr_linenumber" name="206" href="#206">206</a>       <strong class="jxr_keyword">switch</strong>( x ) {
+<a class="jxr_linenumber" name="207" href="#207">207</a>       <strong class="jxr_keyword">case</strong> MT: tran = is_SM(x,S.K0); <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="208" href="#208">208</a>       <strong class="jxr_keyword">case</strong> K0: 
+<a class="jxr_linenumber" name="209" href="#209">209</a>       <strong class="jxr_keyword">case</strong> KA: 
+<a class="jxr_linenumber" name="210" href="#210">210</a>       <strong class="jxr_keyword">case</strong> Ka: 
+<a class="jxr_linenumber" name="211" href="#211">211</a>       <strong class="jxr_keyword">case</strong> Kb:
+<a class="jxr_linenumber" name="212" href="#212">212</a>       <strong class="jxr_keyword">case</strong> K_: tran = is_SM(x,S.KB); <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="213" href="#213">213</a>       <strong class="jxr_keyword">case</strong> X0:
+<a class="jxr_linenumber" name="214" href="#214">214</a>       <strong class="jxr_keyword">case</strong> KX: <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong>,h._<strong class="jxr_keyword">new</strong>); <em class="jxr_comment">// try again in new table</em>
+<a class="jxr_linenumber" name="215" href="#215">215</a>       <strong class="jxr_keyword">default</strong>: 
+<a class="jxr_linenumber" name="216" href="#216">216</a> 	assert !at_goal(h) : <span class="jxr_string">"why you asking for a step when at_goal?"</span>;
+<a class="jxr_linenumber" name="217" href="#217">217</a> 	<strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> Error(<span class="jxr_string">"Unimplemented "</span>+x);
+<a class="jxr_linenumber" name="218" href="#218">218</a>       }
+<a class="jxr_linenumber" name="219" href="#219">219</a>       assert tran != 0 : <span class="jxr_string">"broken step function from "</span>+x;
+<a class="jxr_linenumber" name="220" href="#220">220</a>       <strong class="jxr_keyword">return</strong> h.make(<strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>( x, old_or_<strong class="jxr_keyword">new</strong>, tran ),<strong class="jxr_keyword">this</strong>);
+<a class="jxr_linenumber" name="221" href="#221">221</a>     }
+<a class="jxr_linenumber" name="222" href="#222">222</a> 
+<a class="jxr_linenumber" name="223" href="#223">223</a>     <strong class="jxr_keyword">boolean</strong> at_goal(<a href="..//NBHM_Tester.html">History</a> h) {
+<a class="jxr_linenumber" name="224" href="#224">224</a>       <strong class="jxr_keyword">return</strong> 
+<a class="jxr_linenumber" name="225" href="#225">225</a>         (h._old == S.KB) ||	<em class="jxr_comment">// Old is KB OR</em>
+<a class="jxr_linenumber" name="226" href="#226">226</a>         (h._<strong class="jxr_keyword">new</strong> == S.KB &amp;&amp;	<em class="jxr_comment">// And new is KB</em>
+<a class="jxr_linenumber" name="227" href="#227">227</a>          h.old_is_dead());      <em class="jxr_comment">// Signaled to new table</em>
+<a class="jxr_linenumber" name="228" href="#228">228</a>     }
+<a class="jxr_linenumber" name="229" href="#229">229</a>   }
+<a class="jxr_linenumber" name="230" href="#230">230</a> 
+<a class="jxr_linenumber" name="231" href="#231">231</a>   <em class="jxr_comment">// --- Thrd_del ------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="232" href="#232">232</a>   <em class="jxr_comment">// A Thrd class to do a 'delete()'</em>
+<a class="jxr_linenumber" name="233" href="#233">233</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">class</strong> Thrd_del <strong class="jxr_keyword">extends</strong> <a href="..//NBHM_Tester.html">Thrd</a> {
+<a class="jxr_linenumber" name="234" href="#234">234</a>     Thrd_del( String n ) { <strong class="jxr_keyword">super</strong>(n); }
+<a class="jxr_linenumber" name="235" href="#235">235</a>     Thrd_del( String n, Thrd t0 ) { <strong class="jxr_keyword">super</strong>(n,t0); }
+<a class="jxr_linenumber" name="236" href="#236">236</a>     Thrd_del( String n, Thrd t0, Thrd t1 ) { <strong class="jxr_keyword">super</strong>(n,t0,t1); }
+<a class="jxr_linenumber" name="237" href="#237">237</a> 
+<a class="jxr_linenumber" name="238" href="#238">238</a>     <a href="..//NBHM_Tester.html">History</a> step( History h ) {
+<a class="jxr_linenumber" name="239" href="#239">239</a>       <strong class="jxr_keyword">return</strong> step_impl(h,false,h._old);
+<a class="jxr_linenumber" name="240" href="#240">240</a>     }
+<a class="jxr_linenumber" name="241" href="#241">241</a>     <a href="..//NBHM_Tester.html">History</a> step_impl( History h, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong>, S x ) {
+<a class="jxr_linenumber" name="242" href="#242">242</a>       <strong class="jxr_keyword">switch</strong>( x ) {
+<a class="jxr_linenumber" name="243" href="#243">243</a>       <strong class="jxr_keyword">case</strong> KA: 
+<a class="jxr_linenumber" name="244" href="#244">244</a>       <strong class="jxr_keyword">case</strong> Ka: 
+<a class="jxr_linenumber" name="245" href="#245">245</a>       <strong class="jxr_keyword">case</strong> KB: 
+<a class="jxr_linenumber" name="246" href="#246">246</a>       <strong class="jxr_keyword">case</strong> Kb: {
+<a class="jxr_linenumber" name="247" href="#247">247</a>         <strong class="jxr_keyword">int</strong> tran = is_SM(x,S.K_);
+<a class="jxr_linenumber" name="248" href="#248">248</a>         <strong class="jxr_keyword">if</strong>( tran == 0 ) System.out.println(<span class="jxr_string">" del="</span>+tran+<span class="jxr_string">" now="</span>+x);
+<a class="jxr_linenumber" name="249" href="#249">249</a>         <strong class="jxr_keyword">return</strong> h.make(<strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>( x, old_or_<strong class="jxr_keyword">new</strong>, is_SM(x,S.K_) ),<strong class="jxr_keyword">this</strong>);
+<a class="jxr_linenumber" name="250" href="#250">250</a>       }
+<a class="jxr_linenumber" name="251" href="#251">251</a>       <strong class="jxr_keyword">case</strong> X0:
+<a class="jxr_linenumber" name="252" href="#252">252</a>       <strong class="jxr_keyword">case</strong> KX: <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong>,h._<strong class="jxr_keyword">new</strong>); <em class="jxr_comment">// try again in new table</em>
+<a class="jxr_linenumber" name="253" href="#253">253</a>       <strong class="jxr_keyword">default</strong>: 
+<a class="jxr_linenumber" name="254" href="#254">254</a> 	assert !at_goal(h) : <span class="jxr_string">"why you asking for a step when at_goal?"</span>;
+<a class="jxr_linenumber" name="255" href="#255">255</a> 	<strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> Error(<span class="jxr_string">"Unimplemented "</span>+x);
+<a class="jxr_linenumber" name="256" href="#256">256</a>       }
+<a class="jxr_linenumber" name="257" href="#257">257</a>     }
+<a class="jxr_linenumber" name="258" href="#258">258</a> 
+<a class="jxr_linenumber" name="259" href="#259">259</a>     <strong class="jxr_keyword">boolean</strong> at_goal(<a href="..//NBHM_Tester.html">History</a> h) {
+<a class="jxr_linenumber" name="260" href="#260">260</a>       <strong class="jxr_keyword">return</strong> 
+<a class="jxr_linenumber" name="261" href="#261">261</a>         ( h._old == S.MT || h._old == S.K0 || h._old == S.K_) || <em class="jxr_comment">// Old is K0 or K_ OR</em>
+<a class="jxr_linenumber" name="262" href="#262">262</a>         ((h._<strong class="jxr_keyword">new</strong> == S.MT || h._<strong class="jxr_keyword">new</strong> == S.K0 || h._<strong class="jxr_keyword">new</strong> == S.K_) &amp;&amp; <em class="jxr_comment">// new is K0 or K_ and</em>
+<a class="jxr_linenumber" name="263" href="#263">263</a>          h.old_is_dead());      <em class="jxr_comment">// Signaled to new table</em>
+<a class="jxr_linenumber" name="264" href="#264">264</a>     }
+<a class="jxr_linenumber" name="265" href="#265">265</a>   }
+<a class="jxr_linenumber" name="266" href="#266">266</a> 
+<a class="jxr_linenumber" name="267" href="#267">267</a>   <em class="jxr_comment">// --- Thrd_copy -----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="268" href="#268">268</a>   <em class="jxr_comment">// A Thrd class to do copy from the old table to the new table</em>
+<a class="jxr_linenumber" name="269" href="#269">269</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">class</strong> Thrd_copy <strong class="jxr_keyword">extends</strong> <a href="..//NBHM_Tester.html">Thrd</a> {
+<a class="jxr_linenumber" name="270" href="#270">270</a>     Thrd_copy( String n ) { <strong class="jxr_keyword">super</strong>(n); }
+<a class="jxr_linenumber" name="271" href="#271">271</a>     Thrd_copy( String n, Thrd t0 ) { <strong class="jxr_keyword">super</strong>(n,t0); }
+<a class="jxr_linenumber" name="272" href="#272">272</a>     Thrd_copy( String n, Thrd t0, Thrd t1 ) { <strong class="jxr_keyword">super</strong>(n,t0,t1); }
+<a class="jxr_linenumber" name="273" href="#273">273</a> 
+<a class="jxr_linenumber" name="274" href="#274">274</a>     <a href="..//NBHM_Tester.html">History</a> step_impl( History h, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong>, S sold, S snew ) {
+<a class="jxr_linenumber" name="275" href="#275">275</a>       <strong class="jxr_keyword">if</strong>( (old_or_<strong class="jxr_keyword">new</strong> ? h._<strong class="jxr_keyword">new</strong> : h._old) != sold )
+<a class="jxr_linenumber" name="276" href="#276">276</a>         <em class="jxr_comment">// CAS fails because memory has changed; no actual transition happens;</em>
+<a class="jxr_linenumber" name="277" href="#277">277</a>         <em class="jxr_comment">// re-read memory &amp; try again</em>
+<a class="jxr_linenumber" name="278" href="#278">278</a>         <strong class="jxr_keyword">return</strong> h.append_copy_reader(<strong class="jxr_keyword">this</strong>,old_or_<strong class="jxr_keyword">new</strong>);
+<a class="jxr_linenumber" name="279" href="#279">279</a>       <strong class="jxr_keyword">return</strong> h.make(<strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>(sold,old_or_<strong class="jxr_keyword">new</strong>,is_SM(sold,snew)),<strong class="jxr_keyword">this</strong>);
+<a class="jxr_linenumber" name="280" href="#280">280</a>     }
+<a class="jxr_linenumber" name="281" href="#281">281</a> 
+<a class="jxr_linenumber" name="282" href="#282">282</a>     <a href="..//NBHM_Tester.html">History</a> step( History h ) {
+<a class="jxr_linenumber" name="283" href="#283">283</a>       <a href="..//NBHM_Tester.html">S</a> c_old = h.last_read( <strong class="jxr_keyword">this</strong>, false ); <em class="jxr_comment">// Last read value from OLD table</em>
+<a class="jxr_linenumber" name="284" href="#284">284</a>       <a href="..//NBHM_Tester.html">S</a> c_<strong class="jxr_keyword">new</strong> = h.last_read( <strong class="jxr_keyword">this</strong>, <strong class="jxr_keyword">true</strong>  ); <em class="jxr_comment">// Last read value from NEW table</em>
+<a class="jxr_linenumber" name="285" href="#285">285</a> 
+<a class="jxr_linenumber" name="286" href="#286">286</a>       <strong class="jxr_keyword">switch</strong>( c_old ) {
+<a class="jxr_linenumber" name="287" href="#287">287</a>       <strong class="jxr_keyword">case</strong> MT:  <strong class="jxr_keyword">return</strong> step_impl(h,false,c_old,S.X0);
+<a class="jxr_linenumber" name="288" href="#288">288</a>       <strong class="jxr_keyword">case</strong> K0:  <strong class="jxr_keyword">return</strong> step_impl(h,false,c_old,S.KX);
+<a class="jxr_linenumber" name="289" href="#289">289</a>       <strong class="jxr_keyword">case</strong> KA:
+<a class="jxr_linenumber" name="290" href="#290">290</a>         <strong class="jxr_keyword">switch</strong>( c_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="291" href="#291">291</a>         <strong class="jxr_keyword">case</strong> MT:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.K0);
+<a class="jxr_linenumber" name="292" href="#292">292</a>         <strong class="jxr_keyword">case</strong> K0:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.Ka);
+<a class="jxr_linenumber" name="293" href="#293">293</a>         <strong class="jxr_keyword">case</strong> KA:
+<a class="jxr_linenumber" name="294" href="#294">294</a>         <strong class="jxr_keyword">case</strong> KB:
+<a class="jxr_linenumber" name="295" href="#295">295</a>         <strong class="jxr_keyword">case</strong> Ka:  <strong class="jxr_keyword">return</strong> step_impl(h,false,c_old,S.KX);
+<a class="jxr_linenumber" name="296" href="#296">296</a>         <strong class="jxr_keyword">case</strong> Kb:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.Ka);
+<a class="jxr_linenumber" name="297" href="#297">297</a>         }
+<a class="jxr_linenumber" name="298" href="#298">298</a>         <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="299" href="#299">299</a>       <strong class="jxr_keyword">case</strong> KB:
+<a class="jxr_linenumber" name="300" href="#300">300</a>         <strong class="jxr_keyword">switch</strong>( c_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="301" href="#301">301</a>         <strong class="jxr_keyword">case</strong> MT:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.K0);
+<a class="jxr_linenumber" name="302" href="#302">302</a>         <strong class="jxr_keyword">case</strong> K0:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.Kb);
+<a class="jxr_linenumber" name="303" href="#303">303</a>         <strong class="jxr_keyword">case</strong> Ka:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.Kb);
+<a class="jxr_linenumber" name="304" href="#304">304</a>         <strong class="jxr_keyword">case</strong> KA:
+<a class="jxr_linenumber" name="305" href="#305">305</a>         <strong class="jxr_keyword">case</strong> KB:
+<a class="jxr_linenumber" name="306" href="#306">306</a>         <strong class="jxr_keyword">case</strong> Kb:  <strong class="jxr_keyword">return</strong> step_impl(h,false,c_old,S.KX);
+<a class="jxr_linenumber" name="307" href="#307">307</a>         }
+<a class="jxr_linenumber" name="308" href="#308">308</a>         <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="309" href="#309">309</a>       <strong class="jxr_keyword">case</strong> X0:
+<a class="jxr_linenumber" name="310" href="#310">310</a>       <strong class="jxr_keyword">case</strong> KX:
+<a class="jxr_linenumber" name="311" href="#311">311</a>         <strong class="jxr_keyword">switch</strong>( c_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="312" href="#312">312</a>         <strong class="jxr_keyword">case</strong> Ka:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.KA);
+<a class="jxr_linenumber" name="313" href="#313">313</a>         <strong class="jxr_keyword">case</strong> Kb:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.KB);
+<a class="jxr_linenumber" name="314" href="#314">314</a>         <strong class="jxr_keyword">case</strong> K0:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.K_);
+<a class="jxr_linenumber" name="315" href="#315">315</a>         }
+<a class="jxr_linenumber" name="316" href="#316">316</a>         <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="317" href="#317">317</a>       <strong class="jxr_keyword">case</strong> K_:
+<a class="jxr_linenumber" name="318" href="#318">318</a>         <strong class="jxr_keyword">switch</strong>( c_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="319" href="#319">319</a>         <strong class="jxr_keyword">case</strong> Ka:
+<a class="jxr_linenumber" name="320" href="#320">320</a>         <strong class="jxr_keyword">case</strong> Kb:  <strong class="jxr_keyword">return</strong> step_impl(h,<strong class="jxr_keyword">true</strong> ,c_<strong class="jxr_keyword">new</strong>,S.K0);
+<a class="jxr_linenumber" name="321" href="#321">321</a>         <strong class="jxr_keyword">case</strong> MT:  
+<a class="jxr_linenumber" name="322" href="#322">322</a>         <strong class="jxr_keyword">case</strong> K0:  <strong class="jxr_keyword">return</strong> step_impl(h,false,c_old,S.KX);
+<a class="jxr_linenumber" name="323" href="#323">323</a>         }
+<a class="jxr_linenumber" name="324" href="#324">324</a>         <strong class="jxr_keyword">break</strong>;
+<a class="jxr_linenumber" name="325" href="#325">325</a>       }
+<a class="jxr_linenumber" name="326" href="#326">326</a>       
+<a class="jxr_linenumber" name="327" href="#327">327</a>       <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> Error(<span class="jxr_string">"Unimplemented copy "</span>+h+<span class="jxr_string">" for old "</span>+c_old + <span class="jxr_string">" for new "</span>+c_<strong class="jxr_keyword">new</strong>); 
+<a class="jxr_linenumber" name="328" href="#328">328</a>     }
+<a class="jxr_linenumber" name="329" href="#329">329</a>     <strong class="jxr_keyword">boolean</strong> at_goal(<a href="..//NBHM_Tester.html">History</a> h) { 
+<a class="jxr_linenumber" name="330" href="#330">330</a>       <a href="..//NBHM_Tester.html">S</a> hold = h.last_read( <strong class="jxr_keyword">this</strong>, false ); <em class="jxr_comment">// Last read value from OLD table</em>
+<a class="jxr_linenumber" name="331" href="#331">331</a>       <a href="..//NBHM_Tester.html">S</a> hnew = h.last_read( <strong class="jxr_keyword">this</strong>, <strong class="jxr_keyword">true</strong>  ); <em class="jxr_comment">// Last read value from NEW table</em>
+<a class="jxr_linenumber" name="332" href="#332">332</a>       <strong class="jxr_keyword">return</strong> (hold==S.X0 || hold==S.KX) &amp;&amp;
+<a class="jxr_linenumber" name="333" href="#333">333</a> 	hnew != S.Ka &amp;&amp; hnew != S.Kb &amp;&amp; hnew != S.K0;
+<a class="jxr_linenumber" name="334" href="#334">334</a>     }
+<a class="jxr_linenumber" name="335" href="#335">335</a>   }
+<a class="jxr_linenumber" name="336" href="#336">336</a> 
+<a class="jxr_linenumber" name="337" href="#337">337</a>   <em class="jxr_comment">// --- Event ---------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="338" href="#338">338</a>   <em class="jxr_comment">// An Event is a transition in either the old or new finite state machine,</em>
+<a class="jxr_linenumber" name="339" href="#339">339</a>   <em class="jxr_comment">// or a coherent read by some copy thread</em>
+<a class="jxr_linenumber" name="340" href="#340">340</a>   <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">class</strong> <a href="..//NBHM_Tester.html">Event</a> {
+<a class="jxr_linenumber" name="341" href="#341">341</a>     <em class="jxr_comment">// This is a bit-field, the low bits hold the transitions, the high</em>
+<a class="jxr_linenumber" name="342" href="#342">342</a>     <em class="jxr_comment">// bits hold the TIDs of copy-threads.</em>
+<a class="jxr_linenumber" name="343" href="#343">343</a>     <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> _tran;
+<a class="jxr_linenumber" name="344" href="#344">344</a> 
+<a class="jxr_linenumber" name="345" href="#345">345</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> hashCode() { <strong class="jxr_keyword">return</strong> _tran; }
+<a class="jxr_linenumber" name="346" href="#346">346</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">boolean</strong> equals( Object x ) {
+<a class="jxr_linenumber" name="347" href="#347">347</a>       <strong class="jxr_keyword">if</strong>( !(x instanceof Event) ) <strong class="jxr_keyword">return</strong> false;
+<a class="jxr_linenumber" name="348" href="#348">348</a>       <strong class="jxr_keyword">return</strong> ((Event)x)._tran == _tran;	<em class="jxr_comment">// Bits-compare-equal</em>
+<a class="jxr_linenumber" name="349" href="#349">349</a>     }
+<a class="jxr_linenumber" name="350" href="#350">350</a> 
+<a class="jxr_linenumber" name="351" href="#351">351</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> tran() { <strong class="jxr_keyword">return</strong> _tran &amp; (MAXTRAN-1); }
+<a class="jxr_linenumber" name="352" href="#352">352</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">Event</a>( S begin, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong>, <strong class="jxr_keyword">int</strong> tran ) {
+<a class="jxr_linenumber" name="353" href="#353">353</a>       <em class="jxr_comment">// Sane transitions</em>
+<a class="jxr_linenumber" name="354" href="#354">354</a>       assert tran != 0 : <span class="jxr_string">"reserved for copy-read Events"</span>;
+<a class="jxr_linenumber" name="355" href="#355">355</a>       assert (tran&amp;1)==0 &amp;&amp; _allowed_transitions[tran] == begin;
+<a class="jxr_linenumber" name="356" href="#356">356</a>       <strong class="jxr_keyword">if</strong>( old_or_<strong class="jxr_keyword">new</strong> ) tran |= (1&lt;&lt;LOG2TRAN); <em class="jxr_comment">// Mark as a new-transition</em>
+<a class="jxr_linenumber" name="357" href="#357">357</a>       _tran = tran;
+<a class="jxr_linenumber" name="358" href="#358">358</a>       assert !is_copyread();
+<a class="jxr_linenumber" name="359" href="#359">359</a>     }
+<a class="jxr_linenumber" name="360" href="#360">360</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong>() { <strong class="jxr_keyword">return</strong> (_tran &amp; (1&lt;&lt;LOG2TRAN)) != 0; }
+<a class="jxr_linenumber" name="361" href="#361">361</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">boolean</strong> is_copyread( ) { <strong class="jxr_keyword">return</strong> tran() == 0; }
+<a class="jxr_linenumber" name="362" href="#362">362</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">Event</a>( Thrd_copy copy, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="363" href="#363">363</a>       <strong class="jxr_keyword">int</strong> tran = 0;
+<a class="jxr_linenumber" name="364" href="#364">364</a>       <strong class="jxr_keyword">if</strong>( old_or_<strong class="jxr_keyword">new</strong> ) tran |= (1&lt;&lt;LOG2TRAN); <em class="jxr_comment">// Mark as a new-transition</em>
+<a class="jxr_linenumber" name="365" href="#365">365</a>       _tran = tran;
+<a class="jxr_linenumber" name="366" href="#366">366</a>       assert is_copyread();
+<a class="jxr_linenumber" name="367" href="#367">367</a>     }
+<a class="jxr_linenumber" name="368" href="#368">368</a>   }
+<a class="jxr_linenumber" name="369" href="#369">369</a> 
+<a class="jxr_linenumber" name="370" href="#370">370</a> 
+<a class="jxr_linenumber" name="371" href="#371">371</a>   <em class="jxr_comment">// --- History--------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="372" href="#372">372</a>   <em class="jxr_comment">// A sequence of interesting Events: finite-state-machine transitions</em>
+<a class="jxr_linenumber" name="373" href="#373">373</a>   <em class="jxr_comment">// (including which thread caused them) for both old and new FSM's and</em>
+<a class="jxr_linenumber" name="374" href="#374">374</a>   <em class="jxr_comment">// coherent reads by COPY threads.</em>
+<a class="jxr_linenumber" name="375" href="#375">375</a> 
+<a class="jxr_linenumber" name="376" href="#376">376</a>   <em class="jxr_comment">// The event arrays are immutable and hashed for equivalence, and are used</em>
+<a class="jxr_linenumber" name="377" href="#377">377</a>   <em class="jxr_comment">// to explore the state-sequence-space.  The sequence always starts from the</em>
+<a class="jxr_linenumber" name="378" href="#378">378</a>   <em class="jxr_comment">// same starting point: both FSM's at state MT.  Two histories are the same</em>
+<a class="jxr_linenumber" name="379" href="#379">379</a>   <em class="jxr_comment">// if the FSM transitions &amp; reads occur in the same order (reguardless of</em>
+<a class="jxr_linenumber" name="380" href="#380">380</a>   <em class="jxr_comment">// thread). </em>
+<a class="jxr_linenumber" name="381" href="#381">381</a> 
+<a class="jxr_linenumber" name="382" href="#382">382</a>   <em class="jxr_comment">// All threads that can could have done a particular transition are recorded</em>
+<a class="jxr_linenumber" name="383" href="#383">383</a>   <em class="jxr_comment">// for that Event, so that later I can piece together plausible thread</em>
+<a class="jxr_linenumber" name="384" href="#384">384</a>   <em class="jxr_comment">// interleavings that lead to bad states.</em>
+<a class="jxr_linenumber" name="385" href="#385">385</a>   <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">class</strong> <a href="..//NBHM_Tester.html">History</a> {
+<a class="jxr_linenumber" name="386" href="#386">386</a>     <strong class="jxr_keyword">final</strong> <a href="..//NBHM_Tester.html">Event</a> [] _events;	<em class="jxr_comment">// What event</em>
+<a class="jxr_linenumber" name="387" href="#387">387</a>     <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> [] _tids;		<em class="jxr_comment">// Which threads got here</em>
+<a class="jxr_linenumber" name="388" href="#388">388</a>     <strong class="jxr_keyword">final</strong> <a href="..//NBHM_Tester.html">S</a> _old;		<em class="jxr_comment">// Cache of last old-FSM state</em>
+<a class="jxr_linenumber" name="389" href="#389">389</a>     <strong class="jxr_keyword">final</strong> <a href="..//NBHM_Tester.html">S</a> _<strong class="jxr_keyword">new</strong>;		<em class="jxr_comment">// Cache of last new-FSM state</em>
+<a class="jxr_linenumber" name="390" href="#390">390</a>     <strong class="jxr_keyword">boolean</strong> _complete;		<em class="jxr_comment">// Set to true if there exists a path where all threads are done</em>
+<a class="jxr_linenumber" name="391" href="#391">391</a> 
+<a class="jxr_linenumber" name="392" href="#392">392</a>     <em class="jxr_comment">// helper: old FSM is dead</em>
+<a class="jxr_linenumber" name="393" href="#393">393</a>     <strong class="jxr_keyword">boolean</strong> old_is_dead() { <strong class="jxr_keyword">return</strong> _old == S.X0 || _old == S.KX; }
+<a class="jxr_linenumber" name="394" href="#394">394</a> 
+<a class="jxr_linenumber" name="395" href="#395">395</a>     <em class="jxr_comment">// --- hash --------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="396" href="#396">396</a>     <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">static</strong> ConcurrentHashMap&lt;History,History&gt; hash = 
+<a class="jxr_linenumber" name="397" href="#397">397</a>       <strong class="jxr_keyword">new</strong> ConcurrentHashMap&lt;History,History&gt;();
+<a class="jxr_linenumber" name="398" href="#398">398</a>     <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">int</strong> _hash;
+<a class="jxr_linenumber" name="399" href="#399">399</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> hashCode() { <strong class="jxr_keyword">return</strong> _hash; }
+<a class="jxr_linenumber" name="400" href="#400">400</a>     <em class="jxr_comment">// Two Historys are 'equals' if they have the same state sequences.</em>
+<a class="jxr_linenumber" name="401" href="#401">401</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">boolean</strong> equals( Object x ) {
+<a class="jxr_linenumber" name="402" href="#402">402</a>       <strong class="jxr_keyword">if</strong>( !(x instanceof History) ) <strong class="jxr_keyword">return</strong> false;
+<a class="jxr_linenumber" name="403" href="#403">403</a>       <a href="..//NBHM_Tester.html">History</a> h = (History)x;
+<a class="jxr_linenumber" name="404" href="#404">404</a>       <strong class="jxr_keyword">if</strong>( _events.length != h._events.length ) <strong class="jxr_keyword">return</strong> false;
+<a class="jxr_linenumber" name="405" href="#405">405</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;_events.length; i++ )
+<a class="jxr_linenumber" name="406" href="#406">406</a>         <strong class="jxr_keyword">if</strong>( !_events[i].equals(h._events[i]) ) 
+<a class="jxr_linenumber" name="407" href="#407">407</a>          <strong class="jxr_keyword">return</strong> false;
+<a class="jxr_linenumber" name="408" href="#408">408</a>       <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="409" href="#409">409</a>     }
+<a class="jxr_linenumber" name="410" href="#410">410</a> 
+<a class="jxr_linenumber" name="411" href="#411">411</a>     <em class="jxr_comment">// --- canonical -----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="412" href="#412">412</a>     <em class="jxr_comment">// Return the canonical History here, using the hash table.</em>
+<a class="jxr_linenumber" name="413" href="#413">413</a>     <em class="jxr_comment">// Allows Histories to be compared using pointer-equivalence.</em>
+<a class="jxr_linenumber" name="414" href="#414">414</a>     <strong class="jxr_keyword">private</strong> <a href="..//NBHM_Tester.html">History</a> canonical( ) {
+<a class="jxr_linenumber" name="415" href="#415">415</a>       <strong class="jxr_keyword">if</strong>( _events.length &gt; 0 ) {
+<a class="jxr_linenumber" name="416" href="#416">416</a> 	Event e = _events[_events.length-1];
+<a class="jxr_linenumber" name="417" href="#417">417</a> 	S end = _allowed_transitions[e.tran()+1];
+<a class="jxr_linenumber" name="418" href="#418">418</a> 	assert e.old_or_<strong class="jxr_keyword">new</strong>() || (end != S.Ka &amp;&amp; end != S.Kb) :
+<a class="jxr_linenumber" name="419" href="#419">419</a> 	<span class="jxr_string">"No Primes in old table: "</span>+e.old_or_<strong class="jxr_keyword">new</strong>()+<span class="jxr_string">" "</span>+end;
+<a class="jxr_linenumber" name="420" href="#420">420</a>       }
+<a class="jxr_linenumber" name="421" href="#421">421</a>       <a href="..//NBHM_Tester.html">History</a> old = hash.putIfAbsent(<strong class="jxr_keyword">this</strong>,<strong class="jxr_keyword">this</strong>);
+<a class="jxr_linenumber" name="422" href="#422">422</a>       <strong class="jxr_keyword">if</strong>( old == <strong class="jxr_keyword">null</strong> ) <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">this</strong>;
+<a class="jxr_linenumber" name="423" href="#423">423</a>       <em class="jxr_comment">// Combine thread-ids in the old History</em>
+<a class="jxr_linenumber" name="424" href="#424">424</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;_tids.length; i++ )
+<a class="jxr_linenumber" name="425" href="#425">425</a>         old._tids[i] |= _tids[i];
+<a class="jxr_linenumber" name="426" href="#426">426</a>       <strong class="jxr_keyword">return</strong> old;
+<a class="jxr_linenumber" name="427" href="#427">427</a>     }
+<a class="jxr_linenumber" name="428" href="#428">428</a> 
+<a class="jxr_linenumber" name="429" href="#429">429</a>     <em class="jxr_comment">// --- History -----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="430" href="#430">430</a>     <em class="jxr_comment">// The initial empty history</em>
+<a class="jxr_linenumber" name="431" href="#431">431</a>     <strong class="jxr_keyword">private</strong> <a href="..//NBHM_Tester.html">History</a>() {
+<a class="jxr_linenumber" name="432" href="#432">432</a>       _events = <strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>[0];
+<a class="jxr_linenumber" name="433" href="#433">433</a>       _tids = <strong class="jxr_keyword">new</strong> <strong class="jxr_keyword">int</strong>[_events.length];
+<a class="jxr_linenumber" name="434" href="#434">434</a>       _hash = 1;
+<a class="jxr_linenumber" name="435" href="#435">435</a>       _old = S.MT;
+<a class="jxr_linenumber" name="436" href="#436">436</a>       _<strong class="jxr_keyword">new</strong> = S.MT;
+<a class="jxr_linenumber" name="437" href="#437">437</a>     }
+<a class="jxr_linenumber" name="438" href="#438">438</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <a href="..//NBHM_Tester.html">History</a> make() { <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">new</strong> History().canonical(); }
+<a class="jxr_linenumber" name="439" href="#439">439</a> 
+<a class="jxr_linenumber" name="440" href="#440">440</a>     <em class="jxr_comment">// --- History -----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="441" href="#441">441</a>     <em class="jxr_comment">// Extend an existing history</em>
+<a class="jxr_linenumber" name="442" href="#442">442</a>     <strong class="jxr_keyword">private</strong> <a href="..//NBHM_Tester.html">History</a>(<a href="..//NBHM_Tester.html">History</a> h, <a href="..//NBHM_Tester.html">Event</a> e, <a href="..//NBHM_Tester.html">Thrd</a> t) {
+<a class="jxr_linenumber" name="443" href="#443">443</a>       assert e.is_copyread() || (e.old_or_<strong class="jxr_keyword">new</strong>() ? h._<strong class="jxr_keyword">new</strong> : h._old) == _allowed_transitions[e.tran()];
+<a class="jxr_linenumber" name="444" href="#444">444</a>       <strong class="jxr_keyword">int</strong> idx = h._events.length;
+<a class="jxr_linenumber" name="445" href="#445">445</a>       <em class="jxr_comment">//assert (idx == 0) || !e.is_copyread() || !h._events[idx-1].is_copyread() : "no 2 copyreads in a row "+h;</em>
+<a class="jxr_linenumber" name="446" href="#446">446</a> 
+<a class="jxr_linenumber" name="447" href="#447">447</a>       _events = <strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>[idx+1];
+<a class="jxr_linenumber" name="448" href="#448">448</a>       System.arraycopy(h._events,0,_events,0,idx);
+<a class="jxr_linenumber" name="449" href="#449">449</a>       _tids   = <strong class="jxr_keyword">new</strong> <strong class="jxr_keyword">int</strong>  [idx+1];
+<a class="jxr_linenumber" name="450" href="#450">450</a>       System.arraycopy(h._tids  ,0,_tids  ,0,idx);
+<a class="jxr_linenumber" name="451" href="#451">451</a>       _events[idx] = e;
+<a class="jxr_linenumber" name="452" href="#452">452</a>       _tids  [idx] = t != <strong class="jxr_keyword">null</strong> ? (1&lt;&lt;t._tid) : 0;
+<a class="jxr_linenumber" name="453" href="#453">453</a>       _hash = h.hashCode() + e.hashCode();
+<a class="jxr_linenumber" name="454" href="#454">454</a>       <strong class="jxr_keyword">if</strong>( e.is_copyread() ) {
+<a class="jxr_linenumber" name="455" href="#455">455</a>         _old = h._old;  _<strong class="jxr_keyword">new</strong> = h._<strong class="jxr_keyword">new</strong>;
+<a class="jxr_linenumber" name="456" href="#456">456</a>       } <strong class="jxr_keyword">else</strong> {
+<a class="jxr_linenumber" name="457" href="#457">457</a>         <strong class="jxr_keyword">if</strong>( e.old_or_<strong class="jxr_keyword">new</strong>() ) { _<strong class="jxr_keyword">new</strong> = _allowed_transitions[e.tran()+1]; _old=h._old; }
+<a class="jxr_linenumber" name="458" href="#458">458</a>         <strong class="jxr_keyword">else</strong>                 { _old = _allowed_transitions[e.tran()+1]; _<strong class="jxr_keyword">new</strong>=h._<strong class="jxr_keyword">new</strong>; }
+<a class="jxr_linenumber" name="459" href="#459">459</a>       }
+<a class="jxr_linenumber" name="460" href="#460">460</a>     }
+<a class="jxr_linenumber" name="461" href="#461">461</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">History</a> make(<a href="..//NBHM_Tester.html">Event</a> e, <a href="..//NBHM_Tester.html">Thrd</a> t) { 
+<a class="jxr_linenumber" name="462" href="#462">462</a>       <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">History</a>(<strong class="jxr_keyword">this</strong>,e,t).canonical(); 
+<a class="jxr_linenumber" name="463" href="#463">463</a>     }
+<a class="jxr_linenumber" name="464" href="#464">464</a>     <em class="jxr_comment">// Does this history already exist?</em>
+<a class="jxr_linenumber" name="465" href="#465">465</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">History</a> check(<a href="..//NBHM_Tester.html">Event</a> e, <a href="..//NBHM_Tester.html">Thrd</a> t) { <strong class="jxr_keyword">return</strong> hash.get(<strong class="jxr_keyword">new</strong> History(<strong class="jxr_keyword">this</strong>,e,t)); }
+<a class="jxr_linenumber" name="466" href="#466">466</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">History</a> add_at_goal( Thrd t ) {
+<a class="jxr_linenumber" name="467" href="#467">467</a>       <strong class="jxr_keyword">if</strong>( _tids.length &gt; 0 ) _tids[_tids.length-1] |= (1&lt;&lt;t._tid);
+<a class="jxr_linenumber" name="468" href="#468">468</a>       <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">this</strong>;
+<a class="jxr_linenumber" name="469" href="#469">469</a>     }
+<a class="jxr_linenumber" name="470" href="#470">470</a> 
+<a class="jxr_linenumber" name="471" href="#471">471</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">History</a> append_copy_reader( Thrd_copy t, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="472" href="#472">472</a>       <a href="..//NBHM_Tester.html">Event</a> e = _events[_events.length-1];
+<a class="jxr_linenumber" name="473" href="#473">473</a>       <strong class="jxr_keyword">if</strong>( e.is_copyread() &amp;&amp;    <em class="jxr_comment">// Allow more than 1 thread to read at same time</em>
+<a class="jxr_linenumber" name="474" href="#474">474</a>           e.old_or_<strong class="jxr_keyword">new</strong>() == old_or_<strong class="jxr_keyword">new</strong> &amp;&amp;
+<a class="jxr_linenumber" name="475" href="#475">475</a>           _tids.length &gt; 0 )
+<a class="jxr_linenumber" name="476" href="#476">476</a>         <strong class="jxr_keyword">return</strong> add_at_goal(t);  <em class="jxr_comment">// BREAKS COPYREAD HASHING?</em>
+<a class="jxr_linenumber" name="477" href="#477">477</a>       <a href="..//NBHM_Tester.html">Event</a> ec = <strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">Event</a>( t, old_or_<strong class="jxr_keyword">new</strong> ); <em class="jxr_comment">// Add a coherent-copy-read</em>
+<a class="jxr_linenumber" name="478" href="#478">478</a>       <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">new</strong> <a href="..//NBHM_Tester.html">History</a>(<strong class="jxr_keyword">this</strong>,ec,t).canonical(); 
+<a class="jxr_linenumber" name="479" href="#479">479</a>     }
+<a class="jxr_linenumber" name="480" href="#480">480</a> 
+<a class="jxr_linenumber" name="481" href="#481">481</a>     <em class="jxr_comment">// --- last_read ---------------------------------------------------------</em>
+<a class="jxr_linenumber" name="482" href="#482">482</a>     <em class="jxr_comment">// Last value read by this thread for the given FSM.  Only interesting for</em>
+<a class="jxr_linenumber" name="483" href="#483">483</a>     <em class="jxr_comment">// making changes in the OTHER FSM.</em>
+<a class="jxr_linenumber" name="484" href="#484">484</a>     <strong class="jxr_keyword">public</strong> <a href="..//NBHM_Tester.html">S</a> last_read( Thrd_copy copy, <strong class="jxr_keyword">boolean</strong> old_or_<strong class="jxr_keyword">new</strong> ) {
+<a class="jxr_linenumber" name="485" href="#485">485</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=_events.length-1; i&gt;=0; i-- ) {
+<a class="jxr_linenumber" name="486" href="#486">486</a>         <a href="..//NBHM_Tester.html">Event</a> e = _events[i];
+<a class="jxr_linenumber" name="487" href="#487">487</a>         <strong class="jxr_keyword">if</strong>( e.old_or_<strong class="jxr_keyword">new</strong>() == old_or_<strong class="jxr_keyword">new</strong> ) { <em class="jxr_comment">// Matching FSM</em>
+<a class="jxr_linenumber" name="488" href="#488">488</a>           <strong class="jxr_keyword">boolean</strong> was = (_tids[i]&amp;(1&lt;&lt;copy._tid)) != 0;
+<a class="jxr_linenumber" name="489" href="#489">489</a>           <strong class="jxr_keyword">if</strong>( e.is_copyread( ) &amp;&amp; <em class="jxr_comment">// We just did a copy-thread-read?</em>
+<a class="jxr_linenumber" name="490" href="#490">490</a>               was ) {           <em class="jxr_comment">// of the correct thread?</em>
+<a class="jxr_linenumber" name="491" href="#491">491</a>             <strong class="jxr_keyword">for</strong>( i=i-1; i&gt;=0 ; i-- ) { <em class="jxr_comment">// Find last update to this FSM</em>
+<a class="jxr_linenumber" name="492" href="#492">492</a>               e = _events[i];   
+<a class="jxr_linenumber" name="493" href="#493">493</a>               <strong class="jxr_keyword">if</strong>( e.old_or_<strong class="jxr_keyword">new</strong>() == old_or_<strong class="jxr_keyword">new</strong> &amp;&amp; !e.is_copyread() ) {
+<a class="jxr_linenumber" name="494" href="#494">494</a>                 <strong class="jxr_keyword">return</strong> _allowed_transitions[e.tran()+1];
+<a class="jxr_linenumber" name="495" href="#495">495</a>               }
+<a class="jxr_linenumber" name="496" href="#496">496</a>             }
+<a class="jxr_linenumber" name="497" href="#497">497</a>             <strong class="jxr_keyword">return</strong> S.MT;
+<a class="jxr_linenumber" name="498" href="#498">498</a>           }            
+<a class="jxr_linenumber" name="499" href="#499">499</a>           <em class="jxr_comment">// Or a normal copy-thread update</em>
+<a class="jxr_linenumber" name="500" href="#500">500</a>           <strong class="jxr_keyword">if</strong>( was )
+<a class="jxr_linenumber" name="501" href="#501">501</a>             <strong class="jxr_keyword">return</strong> _allowed_transitions[e.tran()+1];
+<a class="jxr_linenumber" name="502" href="#502">502</a>         }
+<a class="jxr_linenumber" name="503" href="#503">503</a>       }
+<a class="jxr_linenumber" name="504" href="#504">504</a>       <strong class="jxr_keyword">return</strong> S.MT;              <em class="jxr_comment">// Not ever read before</em>
+<a class="jxr_linenumber" name="505" href="#505">505</a>     }
+<a class="jxr_linenumber" name="506" href="#506">506</a> 
+<a class="jxr_linenumber" name="507" href="#507">507</a>     <em class="jxr_comment">// --- toString ----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="508" href="#508">508</a>     <em class="jxr_comment">// Pretty print</em>
+<a class="jxr_linenumber" name="509" href="#509">509</a>     <strong class="jxr_keyword">public</strong> String toString() {
+<a class="jxr_linenumber" name="510" href="#510">510</a>       <a href="..//NBHM_Tester.html">S</a> s_old = S.MT;
+<a class="jxr_linenumber" name="511" href="#511">511</a>       <a href="..//NBHM_Tester.html">S</a> s_<strong class="jxr_keyword">new</strong> = S.MT;
+<a class="jxr_linenumber" name="512" href="#512">512</a>       StringBuffer buf = <strong class="jxr_keyword">new</strong> StringBuffer();
+<a class="jxr_linenumber" name="513" href="#513">513</a>       buf.append(<span class="jxr_string">"("</span>).append(s_old).append(<span class="jxr_string">"/"</span>).append(s_<strong class="jxr_keyword">new</strong>);
+<a class="jxr_linenumber" name="514" href="#514">514</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;_events.length; i++ ) {
+<a class="jxr_linenumber" name="515" href="#515">515</a>         buf.append(<span class="jxr_string">" --"</span>);
+<a class="jxr_linenumber" name="516" href="#516">516</a> 	<em class="jxr_comment">// Print all threads involved here</em>
+<a class="jxr_linenumber" name="517" href="#517">517</a>         <strong class="jxr_keyword">long</strong> tids = _tids[i];
+<a class="jxr_linenumber" name="518" href="#518">518</a>         <strong class="jxr_keyword">int</strong> t=0;
+<a class="jxr_linenumber" name="519" href="#519">519</a>         <strong class="jxr_keyword">boolean</strong> first = <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="520" href="#520">520</a>         <strong class="jxr_keyword">while</strong>( tids != 0 ) {
+<a class="jxr_linenumber" name="521" href="#521">521</a>           <strong class="jxr_keyword">if</strong>( (tids &amp; (1&lt;&lt;t)) != 0 ) {
+<a class="jxr_linenumber" name="522" href="#522">522</a>             tids -= (1&lt;&lt;t);
+<a class="jxr_linenumber" name="523" href="#523">523</a>             <strong class="jxr_keyword">if</strong>( !first ) buf.append(<span class="jxr_string">","</span>);
+<a class="jxr_linenumber" name="524" href="#524">524</a>             buf.append(Thrd._thrds[t]);
+<a class="jxr_linenumber" name="525" href="#525">525</a>             first = false;
+<a class="jxr_linenumber" name="526" href="#526">526</a>           }
+<a class="jxr_linenumber" name="527" href="#527">527</a>           t++;
+<a class="jxr_linenumber" name="528" href="#528">528</a>         }
+<a class="jxr_linenumber" name="529" href="#529">529</a> 	<em class="jxr_comment">// Update the states based on the transition</em>
+<a class="jxr_linenumber" name="530" href="#530">530</a> 	Event e = _events[i];
+<a class="jxr_linenumber" name="531" href="#531">531</a>         <a href="..//NBHM_Tester.html">S</a> s = e.old_or_<strong class="jxr_keyword">new</strong>() ? s_<strong class="jxr_keyword">new</strong> : s_old;
+<a class="jxr_linenumber" name="532" href="#532">532</a>         <strong class="jxr_keyword">if</strong>( e.is_copyread() ) {
+<a class="jxr_linenumber" name="533" href="#533">533</a>           buf.append(<span class="jxr_string">"--&gt; ["</span>).append(e.old_or_<strong class="jxr_keyword">new</strong>()?<span class="jxr_string">"new "</span>:<span class="jxr_string">"old "</span>).append(s).append(<span class="jxr_string">"]"</span>);
+<a class="jxr_linenumber" name="534" href="#534">534</a>         } <strong class="jxr_keyword">else</strong> {
+<a class="jxr_linenumber" name="535" href="#535">535</a>           assert _allowed_transitions[e.tran()] == s;
+<a class="jxr_linenumber" name="536" href="#536">536</a>           s = _allowed_transitions[e.tran()+1]; <em class="jxr_comment">// New State</em>
+<a class="jxr_linenumber" name="537" href="#537">537</a>           <strong class="jxr_keyword">if</strong>( e.old_or_<strong class="jxr_keyword">new</strong>() ) s_<strong class="jxr_keyword">new</strong> = s; <strong class="jxr_keyword">else</strong> s_old = s;
+<a class="jxr_linenumber" name="538" href="#538">538</a>           <em class="jxr_comment">// Print the New World Order</em>
+<a class="jxr_linenumber" name="539" href="#539">539</a>           buf.append(<span class="jxr_string">"--&gt; "</span>).append(s_old).append(<span class="jxr_string">"/"</span>).append(s_<strong class="jxr_keyword">new</strong>);
+<a class="jxr_linenumber" name="540" href="#540">540</a>         }
+<a class="jxr_linenumber" name="541" href="#541">541</a>       }
+<a class="jxr_linenumber" name="542" href="#542">542</a>       buf.append(<span class="jxr_string">")"</span>);
+<a class="jxr_linenumber" name="543" href="#543">543</a>       assert s_old == _old;
+<a class="jxr_linenumber" name="544" href="#544">544</a>       assert s_<strong class="jxr_keyword">new</strong> == _<strong class="jxr_keyword">new</strong>;
+<a class="jxr_linenumber" name="545" href="#545">545</a>       <strong class="jxr_keyword">return</strong> buf.toString();
+<a class="jxr_linenumber" name="546" href="#546">546</a>     }
+<a class="jxr_linenumber" name="547" href="#547">547</a> 
+<a class="jxr_linenumber" name="548" href="#548">548</a>     <em class="jxr_comment">// --- printAll ----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="549" href="#549">549</a>     <em class="jxr_comment">// Pretty print ALL histories</em>
+<a class="jxr_linenumber" name="550" href="#550">550</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">void</strong> printAll     () { 
+<a class="jxr_linenumber" name="551" href="#551">551</a>       <strong class="jxr_keyword">for</strong>( History h : hash.keySet() ) {
+<a class="jxr_linenumber" name="552" href="#552">552</a>         System.out.println(h);
+<a class="jxr_linenumber" name="553" href="#553">553</a>       }
+<a class="jxr_linenumber" name="554" href="#554">554</a>     }
+<a class="jxr_linenumber" name="555" href="#555">555</a> 
+<a class="jxr_linenumber" name="556" href="#556">556</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">void</strong> printComplete() { 
+<a class="jxr_linenumber" name="557" href="#557">557</a>       <strong class="jxr_keyword">for</strong>( History h : hash.keySet() ) {
+<a class="jxr_linenumber" name="558" href="#558">558</a>         <strong class="jxr_keyword">if</strong>( h._complete )
+<a class="jxr_linenumber" name="559" href="#559">559</a>           System.out.println(h);
+<a class="jxr_linenumber" name="560" href="#560">560</a>       }
+<a class="jxr_linenumber" name="561" href="#561">561</a>     }
+<a class="jxr_linenumber" name="562" href="#562">562</a> 
+<a class="jxr_linenumber" name="563" href="#563">563</a>     <em class="jxr_comment">// --- witness -----------------------------------------------------------</em>
+<a class="jxr_linenumber" name="564" href="#564">564</a>     <em class="jxr_comment">// Report back all the visible 'get' values possible</em>
+<a class="jxr_linenumber" name="565" href="#565">565</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">void</strong> printWitness() { 
+<a class="jxr_linenumber" name="566" href="#566">566</a>       <strong class="jxr_keyword">for</strong>( History h : hash.keySet() ) {
+<a class="jxr_linenumber" name="567" href="#567">567</a>         <strong class="jxr_keyword">if</strong>( h._complete )
+<a class="jxr_linenumber" name="568" href="#568">568</a>           System.out.println(h.witness()+<span class="jxr_string">" "</span>+h);
+<a class="jxr_linenumber" name="569" href="#569">569</a>       }
+<a class="jxr_linenumber" name="570" href="#570">570</a>     }
+<a class="jxr_linenumber" name="571" href="#571">571</a> 
+<a class="jxr_linenumber" name="572" href="#572">572</a>     <em class="jxr_javadoccomment">/**</em>
+<a class="jxr_linenumber" name="573" href="#573">573</a> <em class="jxr_javadoccomment">     * Describe &lt;code&gt;witness&lt;/code&gt; method here.</em>
+<a class="jxr_linenumber" name="574" href="#574">574</a> <em class="jxr_javadoccomment">     *</em>
+<a class="jxr_linenumber" name="575" href="#575">575</a> <em class="jxr_javadoccomment">     * @return a &lt;code&gt;String&lt;/code&gt; value</em>
+<a class="jxr_linenumber" name="576" href="#576">576</a> <em class="jxr_javadoccomment">     */</em>
+<a class="jxr_linenumber" name="577" href="#577">577</a>     <strong class="jxr_keyword">public</strong> String witness() {
+<a class="jxr_linenumber" name="578" href="#578">578</a>       <a href="..//NBHM_Tester.html">S</a> s_old = S.MT;
+<a class="jxr_linenumber" name="579" href="#579">579</a>       <a href="..//NBHM_Tester.html">S</a> s_<strong class="jxr_keyword">new</strong> = S.MT;
+<a class="jxr_linenumber" name="580" href="#580">580</a>       <a href="..//NBHM_Tester.html">S</a> s_last = S.MT;
+<a class="jxr_linenumber" name="581" href="#581">581</a>       StringBuffer buf = <strong class="jxr_keyword">new</strong> StringBuffer();
+<a class="jxr_linenumber" name="582" href="#582">582</a>       buf.append(<span class="jxr_string">"{"</span>);
+<a class="jxr_linenumber" name="583" href="#583">583</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;_events.length; i++ ) {
+<a class="jxr_linenumber" name="584" href="#584">584</a> 	Event e = _events[i];
+<a class="jxr_linenumber" name="585" href="#585">585</a>         <strong class="jxr_keyword">if</strong>( !e.is_copyread() ) {
+<a class="jxr_linenumber" name="586" href="#586">586</a>           <em class="jxr_comment">// Update the states based on the transition</em>
+<a class="jxr_linenumber" name="587" href="#587">587</a>           <a href="..//NBHM_Tester.html">S</a> s = e.old_or_<strong class="jxr_keyword">new</strong>() ? s_<strong class="jxr_keyword">new</strong> : s_old;
+<a class="jxr_linenumber" name="588" href="#588">588</a>           s = _allowed_transitions[e.tran()+1]; <em class="jxr_comment">// New State</em>
+<a class="jxr_linenumber" name="589" href="#589">589</a>           <strong class="jxr_keyword">if</strong>( e.old_or_<strong class="jxr_keyword">new</strong>() ) s_<strong class="jxr_keyword">new</strong> = s; <strong class="jxr_keyword">else</strong> s_old = s;
+<a class="jxr_linenumber" name="590" href="#590">590</a>           <em class="jxr_comment">// Read from old first, or new if old is dead</em>
+<a class="jxr_linenumber" name="591" href="#591">591</a>           s = (s_old == S.X0 || s_old == S.KX) ? s_<strong class="jxr_keyword">new</strong> : s_old;
+<a class="jxr_linenumber" name="592" href="#592">592</a>           <em class="jxr_comment">// 'flatten' answers</em>
+<a class="jxr_linenumber" name="593" href="#593">593</a>           <strong class="jxr_keyword">if</strong>( s == S.K0 || s == S.K_ ) s = S.MT;
+<a class="jxr_linenumber" name="594" href="#594">594</a>           <strong class="jxr_keyword">if</strong>( s == S.Ka ) s = S.KA;
+<a class="jxr_linenumber" name="595" href="#595">595</a>           <strong class="jxr_keyword">if</strong>( s == S.Kb ) s = S.KB;
+<a class="jxr_linenumber" name="596" href="#596">596</a>           <strong class="jxr_keyword">if</strong>( s != s_last ) {
+<a class="jxr_linenumber" name="597" href="#597">597</a>             buf.append(s).append(<span class="jxr_string">" "</span>);
+<a class="jxr_linenumber" name="598" href="#598">598</a>             s_last = s;
+<a class="jxr_linenumber" name="599" href="#599">599</a>           }
+<a class="jxr_linenumber" name="600" href="#600">600</a>         }
+<a class="jxr_linenumber" name="601" href="#601">601</a>       }
+<a class="jxr_linenumber" name="602" href="#602">602</a>       buf.append(<span class="jxr_string">"}"</span>);
+<a class="jxr_linenumber" name="603" href="#603">603</a>       <strong class="jxr_keyword">return</strong> buf.toString();
+<a class="jxr_linenumber" name="604" href="#604">604</a>     }
+<a class="jxr_linenumber" name="605" href="#605">605</a> 
+<a class="jxr_linenumber" name="606" href="#606">606</a>     <em class="jxr_comment">// --- search ------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="607" href="#607">607</a>     <em class="jxr_comment">// Search the state space for running N threads, each stepping to some</em>
+<a class="jxr_linenumber" name="608" href="#608">608</a>     <em class="jxr_comment">// goal.  Try stepping each thread 1 step from the current state.</em>
+<a class="jxr_linenumber" name="609" href="#609">609</a>     <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">void</strong> search(<strong class="jxr_keyword">final</strong> <a href="..//NBHM_Tester.html">Thrd</a>[] q) {
+<a class="jxr_linenumber" name="610" href="#610">610</a>       <em class="jxr_comment">// Search 1 step for each thread</em>
+<a class="jxr_linenumber" name="611" href="#611">611</a>       <strong class="jxr_keyword">boolean</strong> all_threads_done = <strong class="jxr_keyword">true</strong>;
+<a class="jxr_linenumber" name="612" href="#612">612</a>       <strong class="jxr_keyword">for</strong>( <strong class="jxr_keyword">int</strong> i=0; i&lt;q.length; i++ ) {
+<a class="jxr_linenumber" name="613" href="#613">613</a>         <a href="..//NBHM_Tester.html">Thrd</a> T = q[i];
+<a class="jxr_linenumber" name="614" href="#614">614</a>         <strong class="jxr_keyword">if</strong>( T == <strong class="jxr_keyword">null</strong> )         <em class="jxr_comment">// Can we advance this thread anymore?</em>
+<a class="jxr_linenumber" name="615" href="#615">615</a>           <strong class="jxr_keyword">continue</strong>;             <em class="jxr_comment">// Nope</em>
+<a class="jxr_linenumber" name="616" href="#616">616</a>         all_threads_done = false;
+<a class="jxr_linenumber" name="617" href="#617">617</a>         <strong class="jxr_keyword">if</strong>( !T.can_start(q) )   <em class="jxr_comment">// Can start this thread yet?</em>
+<a class="jxr_linenumber" name="618" href="#618">618</a>           <strong class="jxr_keyword">continue</strong>;             <em class="jxr_comment">// Nope</em>
+<a class="jxr_linenumber" name="619" href="#619">619</a> 	<em class="jxr_comment">// Do One Step, unless at-goal already</em>
+<a class="jxr_linenumber" name="620" href="#620">620</a> 	History h = T.at_goal(<strong class="jxr_keyword">this</strong>) ? <strong class="jxr_keyword">this</strong>.add_at_goal(T) : T.step(<strong class="jxr_keyword">this</strong>);
+<a class="jxr_linenumber" name="621" href="#621">621</a> 	<em class="jxr_comment">// Found a new state; must explore</em>
+<a class="jxr_linenumber" name="622" href="#622">622</a> 	Thrd[] r = q.clone();	  <em class="jxr_comment">// Clone old thread list</em>
+<a class="jxr_linenumber" name="623" href="#623">623</a> 	<strong class="jxr_keyword">if</strong>( T.at_goal(h) )	  <em class="jxr_comment">// Hit goal?</em>
+<a class="jxr_linenumber" name="624" href="#624">624</a> 	  r[i] = <strong class="jxr_keyword">null</strong>;		  <em class="jxr_comment">// No more advance on this thread</em>
+<a class="jxr_linenumber" name="625" href="#625">625</a> 	h.search(r);		  <em class="jxr_comment">// Search On!</em>
+<a class="jxr_linenumber" name="626" href="#626">626</a>       }
+<a class="jxr_linenumber" name="627" href="#627">627</a>       <strong class="jxr_keyword">if</strong>( all_threads_done )    <em class="jxr_comment">// All threads done at this history</em>
+<a class="jxr_linenumber" name="628" href="#628">628</a>         _complete = <strong class="jxr_keyword">true</strong>;       <em class="jxr_comment">// so mark it</em>
+<a class="jxr_linenumber" name="629" href="#629">629</a>     }
+<a class="jxr_linenumber" name="630" href="#630">630</a>   }
+<a class="jxr_linenumber" name="631" href="#631">631</a> 
+<a class="jxr_linenumber" name="632" href="#632">632</a>   <em class="jxr_comment">// --- main ----------------------------------------------------------------</em>
+<a class="jxr_linenumber" name="633" href="#633">633</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">void</strong> main( String[] args ) {
+<a class="jxr_linenumber" name="634" href="#634">634</a>     <strong class="jxr_keyword">if</strong>( MAXTRAN &lt;= _allowed_transitions.length )
+<a class="jxr_linenumber" name="635" href="#635">635</a>       <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> Error(<span class="jxr_string">"Write some log2 function for MAXTRAN or bump its size"</span>);
+<a class="jxr_linenumber" name="636" href="#636">636</a> 
+<a class="jxr_linenumber" name="637" href="#637">637</a>     <em class="jxr_comment">// Validate that all states reachable</em>
+<a class="jxr_linenumber" name="638" href="#638">638</a>     <strong class="jxr_keyword">boolean</strong> [] reached = <strong class="jxr_keyword">new</strong> <strong class="jxr_keyword">boolean</strong>[S.MAX];
+<a class="jxr_linenumber" name="639" href="#639">639</a>     S.MT.compute_reached(reached);
+<a class="jxr_linenumber" name="640" href="#640">640</a>     <strong class="jxr_keyword">for</strong>( S s : S.values() )
+<a class="jxr_linenumber" name="641" href="#641">641</a>       <strong class="jxr_keyword">if</strong>( !reached[s._idx] &amp;&amp; s != S.BAD )
+<a class="jxr_linenumber" name="642" href="#642">642</a>         <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> Error(<span class="jxr_string">"State "</span>+s+<span class="jxr_string">" not reachable from any transition"</span>);
+<a class="jxr_linenumber" name="643" href="#643">643</a> 
+<a class="jxr_linenumber" name="644" href="#644">644</a> 
+<a class="jxr_linenumber" name="645" href="#645">645</a>     <a href="..//NBHM_Tester.html">Thrd</a> a0 = <strong class="jxr_keyword">new</strong> Thrd_A(<span class="jxr_string">"a0"</span>);
+<a class="jxr_linenumber" name="646" href="#646">646</a>     <em class="jxr_comment">//Thrd a1 = new Thrd_A("a1");</em>
+<a class="jxr_linenumber" name="647" href="#647">647</a>     <a href="..//NBHM_Tester.html">Thrd</a> b0 = <strong class="jxr_keyword">new</strong> Thrd_B(<span class="jxr_string">"b0"</span>);
+<a class="jxr_linenumber" name="648" href="#648">648</a>     <em class="jxr_comment">//Thrd d0 = new Thrd_del("d0");</em>
+<a class="jxr_linenumber" name="649" href="#649">649</a>     <em class="jxr_comment">//Thrd d1 = new Thrd_del("d1");</em>
+<a class="jxr_linenumber" name="650" href="#650">650</a>     <a href="..//NBHM_Tester.html">Thrd</a> c0 = <strong class="jxr_keyword">new</strong> Thrd_copy(<span class="jxr_string">"c0"</span>);
+<a class="jxr_linenumber" name="651" href="#651">651</a>     <a href="..//NBHM_Tester.html">Thrd</a> c1 = <strong class="jxr_keyword">new</strong> Thrd_copy(<span class="jxr_string">"c1"</span>);
+<a class="jxr_linenumber" name="652" href="#652">652</a>     <a href="..//NBHM_Tester.html">Thrd</a>[] thrds = {a0,b0,c0,c1};
+<a class="jxr_linenumber" name="653" href="#653">653</a>     <a href="..//NBHM_Tester.html">History</a> h = History.make();
+<a class="jxr_linenumber" name="654" href="#654">654</a>     h.search(thrds);
+<a class="jxr_linenumber" name="655" href="#655">655</a> 
+<a class="jxr_linenumber" name="656" href="#656">656</a>     <em class="jxr_comment">// need to check for no-dropped-last-write and also no-flip-flops</em>
+<a class="jxr_linenumber" name="657" href="#657">657</a> 
+<a class="jxr_linenumber" name="658" href="#658">658</a>     <em class="jxr_comment">// need to remove extra paths with redundant copy-reads, such as when c0</em>
+<a class="jxr_linenumber" name="659" href="#659">659</a>     <em class="jxr_comment">// does a read, another thread updates, c0 fails a CAS and does another</em>
+<a class="jxr_linenumber" name="660" href="#660">660</a>     <em class="jxr_comment">// read.</em>
+<a class="jxr_linenumber" name="661" href="#661">661</a> 
+<a class="jxr_linenumber" name="662" href="#662">662</a>     <em class="jxr_comment">//History.printAll();</em>
+<a class="jxr_linenumber" name="663" href="#663">663</a>     <em class="jxr_comment">//History.printComplete();</em>
+<a class="jxr_linenumber" name="664" href="#664">664</a>     History.printWitness();
+<a class="jxr_linenumber" name="665" href="#665">665</a>   }
+<a class="jxr_linenumber" name="666" href="#666">666</a> }
+<a class="jxr_linenumber" name="667" href="#667">667</a> 
+</pre>
+<hr/><div id="footer">This page was automatically generated by <a href="http://maven.apache.org/">Maven</a></div></body>
+</html>
+
