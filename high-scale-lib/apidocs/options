@@ -15,7 +15,9 @@
 -docencoding
 'UTF-8'
 -doctitle
-'Highly Scalable Java 1.1.1-SNAPSHOT API'
+'Highly Scalable Java 1.1.2 API'
+-link
+'http://java.sun.com/javase/6/docs/api'
 -linkoffline
 'http://stephenc.github.com/high-scale-lib/java_util_hashtable/apidocs' '/home/connollys/src/high-scale-lib/java_util_hashtable/target/site/apidocs'
 -linkoffline
@@ -23,4 +25,4 @@
 -use
 -version
 -windowtitle
-'Highly Scalable Java 1.1.1-SNAPSHOT API'
+'Highly Scalable Java 1.1.2 API'
