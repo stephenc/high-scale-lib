@@ -529,7 +529,9 @@ public class NonBlockingHashMapLong<TypeV>
         // needs to force a table-resize for a too-long key-reprobe sequence.
         // Check for too-many-reprobes on get.
         if( ++reprobe_cnt >= reprobe_limit(len) ) // too many probes
-          return copy_slot_and_check(idx,key).get_impl(key); // Retry in the new table
+          return _newchm == null // Table copy in progress?
+            ? null               // Nope!  A clear miss
+            : copy_slot_and_check(idx,key).get_impl(key); // Retry in the new table
         
         idx = (idx+1)&(len-1);    // Reprobe by 1!  (could now prefetch)
       }
