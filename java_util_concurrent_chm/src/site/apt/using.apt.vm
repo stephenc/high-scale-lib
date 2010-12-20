@@ -1,0 +1,37 @@
+  ----
+Using ${project.name}
+  ----
+Stephen Connolly
+  ----
+
+~~
+~~ Written by Stephen Connolly and released to the public domain, as explained
+~~ at http://creativecommons.org/licenses/publicdomain
+~~
+
+Using ${project.name}
+
+  The direct replacements match the API - but not all behaviors are covered by
+  the API, and so they may not work for your program.
+
+  This module provides a lock-free alternate implementation of java.util.concurrent.ConcurrentHashMap
+  with better scaling properties and generally lower costs to mutate the Map.
+  It provides identical correctness properties as ConcurrentHashMap.  All
+  operations are non-blocking and multi-thread safe, including all update
+  operations.  It scales substatially better than the standard
+  java.util.concurrent.ConcurrentHashMap for high update rates, even with a
+  large concurrency factor.  Scaling is linear up to 768 CPUs on a 768-CPU
+  Azul box, even with 100% updates or 100% reads or any fraction in-between.
+  Linear scaling up to all cpus has been observed on a 32-way Sun US2 box,
+  32-way Sun Niagra box, 8-way Intel box and a 4-way Power box.
+
+  If you want to drop-in the non-blocking versions of ConcurrentHashMap you'll need to
+  alter your bootclasspath - these classes come directly from your JDK and so
+  are found via the System loader before any class-path hacks can be done.
+
+  To replace the JDK implementation of ConcurrentHashMap with the better scaling version,
+  add ${project.artifactId}-${project.version}.${project.packaging} to your java launch line:
+
+---
+java -Xbootclasspath/p:${project.artifactId}-${project.version}.${project.packaging} my_app_goes_here
+---

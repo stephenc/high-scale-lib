@@ -1,0 +1,33 @@
+  ----
+Using ${project.name}
+  ----
+Stephen Connolly
+  ----
+
+~~
+~~ Written by Stephen Connolly and released to the public domain, as explained
+~~ at http://creativecommons.org/licenses/publicdomain
+~~
+
+Using ${project.name}
+
+  The direct replacements match the API - but not all behaviors are covered by
+  the API, and so they may not work for your program.  In particular, the
+  replacement for java.util.Hashtable is NOT synchronized (that is the point!),
+  although it is multi-threaded safe.  If you rely on the undocumented
+  synchronization behavior of the JDK Hashtable, your program may not work.
+  Similarly, the iteration order is different between this version and the JDK
+  version (this exact issue broke the SpecJBB benchmark when the iteration order
+  was changed slightly (via using a slightly different hash function) between
+  JDK rev's).
+
+  If you want to drop-in the non-blocking versions of Hashtable you'll need to
+  alter your bootclasspath - these classes come directly from your JDK and so
+  are found via the System loader before any class-path hacks can be done.
+
+  To replace the JDK implementation of Hashtable with a non-blocking version of
+  Hashtable, add ${project.artifactId}-${project.version}.${project.packaging} to your java launch line:
+
+---
+java -Xbootclasspath/p:${project.artifactId}-${project.version}.${project.packaging} my_app_goes_here
+---
