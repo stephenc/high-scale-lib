@@ -1,0 +1,48 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+<title>ConcurrentHashMap xref</title>
+<link type="text/css" rel="stylesheet" href="../../../stylesheet.css" />
+</head>
+<body>
+<div id="overview"><a href="../../../../apidocs/java/util/concurrent/ConcurrentHashMap.html">View Javadoc</a></div><pre>
+
+<a class="jxr_linenumber" name="1" href="#1">1</a>   <em class="jxr_comment">/*</em>
+<a class="jxr_linenumber" name="2" href="#2">2</a>   <em class="jxr_comment"> * Written by Cliff Click and released to the public domain, as explained at</em>
+<a class="jxr_linenumber" name="3" href="#3">3</a>   <em class="jxr_comment"> * <a href="http://creativecommons.org/licenses/publicdomain" target="alexandria_uri">http://creativecommons.org/licenses/publicdomain</a></em>
+<a class="jxr_linenumber" name="4" href="#4">4</a>   <em class="jxr_comment"> */</em>
+<a class="jxr_linenumber" name="5" href="#5">5</a>   
+<a class="jxr_linenumber" name="6" href="#6">6</a>   <strong class="jxr_keyword">package</strong> java.util.concurrent;
+<a class="jxr_linenumber" name="7" href="#7">7</a>   <strong class="jxr_keyword">import</strong>  java.util.Map;
+<a class="jxr_linenumber" name="8" href="#8">8</a>   <strong class="jxr_keyword">import</strong>  org.cliffc.high_scale_lib.NonBlockingHashMap;
+<a class="jxr_linenumber" name="9" href="#9">9</a>   
+<a class="jxr_linenumber" name="10" href="#10">10</a>  <em class="jxr_javadoccomment">/**</em>
+<a class="jxr_linenumber" name="11" href="#11">11</a>  <em class="jxr_javadoccomment"> * A plug-in replacement for JDK1.5 {@link java.util.concurrent.ConcurrentHashMap}.  </em>
+<a class="jxr_linenumber" name="12" href="#12">12</a>  <em class="jxr_javadoccomment"> * This version is based on {@link * org.cliffc.high_scale_lib.NonBlockingHashMap}.  </em>
+<a class="jxr_linenumber" name="13" href="#13">13</a>  <em class="jxr_javadoccomment"> * This solution should be completely compatible, including the serialized</em>
+<a class="jxr_linenumber" name="14" href="#14">14</a>  <em class="jxr_javadoccomment"> * forms and all multi-threaded ordering guarantees.</em>
+<a class="jxr_linenumber" name="15" href="#15">15</a>  <em class="jxr_javadoccomment"> *</em>
+<a class="jxr_linenumber" name="16" href="#16">16</a>  <em class="jxr_javadoccomment"> * @since 1.5</em>
+<a class="jxr_linenumber" name="17" href="#17">17</a>  <em class="jxr_javadoccomment"> * @author Cliff Click</em>
+<a class="jxr_linenumber" name="18" href="#18">18</a>  <em class="jxr_javadoccomment"> * @param &lt;TypeK&gt; the type of keys maintained by this map</em>
+<a class="jxr_linenumber" name="19" href="#19">19</a>  <em class="jxr_javadoccomment"> * @param &lt;TypeV&gt; the type of mapped values</em>
+<a class="jxr_linenumber" name="20" href="#20">20</a>  <em class="jxr_javadoccomment"> */</em>
+<a class="jxr_linenumber" name="21" href="#21">21</a>  <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">class</strong> ConcurrentHashMap&lt;K, V&gt; <strong class="jxr_keyword">extends</strong> NonBlockingHashMap&lt;K, V&gt; {
+<a class="jxr_linenumber" name="22" href="#22">22</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">long</strong> serialVersionUID = 7249069246763182397L;
+<a class="jxr_linenumber" name="23" href="#23">23</a>    <strong class="jxr_keyword">public</strong> <a href="../../../java/util/concurrent/ConcurrentHashMap.html">ConcurrentHashMap</a>() { <strong class="jxr_keyword">super</strong>(); }
+<a class="jxr_linenumber" name="24" href="#24">24</a>    <strong class="jxr_keyword">public</strong> <a href="../../../java/util/concurrent/ConcurrentHashMap.html">ConcurrentHashMap</a>(<strong class="jxr_keyword">int</strong> initialCapacity) { <strong class="jxr_keyword">super</strong>(initialCapacity); }
+<a class="jxr_linenumber" name="25" href="#25">25</a>    <strong class="jxr_keyword">public</strong> <a href="../../../java/util/concurrent/ConcurrentHashMap.html">ConcurrentHashMap</a>(<strong class="jxr_keyword">int</strong> initialCapacity, <strong class="jxr_keyword">float</strong> loadFactor, <strong class="jxr_keyword">int</strong> concurrencyLevel) { 
+<a class="jxr_linenumber" name="26" href="#26">26</a>      <strong class="jxr_keyword">super</strong>(initialCapacity);  
+<a class="jxr_linenumber" name="27" href="#27">27</a>      <strong class="jxr_keyword">if</strong> (!(loadFactor &gt; 0) || concurrencyLevel &lt;= 0)
+<a class="jxr_linenumber" name="28" href="#28">28</a>        <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> IllegalArgumentException();
+<a class="jxr_linenumber" name="29" href="#29">29</a>    }
+<a class="jxr_linenumber" name="30" href="#30">30</a>    <strong class="jxr_keyword">public</strong> <a href="../../../java/util/concurrent/ConcurrentHashMap.html">ConcurrentHashMap</a>(Map&lt;? <strong class="jxr_keyword">extends</strong> K, ? <strong class="jxr_keyword">extends</strong> V&gt; t) {
+<a class="jxr_linenumber" name="31" href="#31">31</a>      <strong class="jxr_keyword">super</strong>();
+<a class="jxr_linenumber" name="32" href="#32">32</a>      putAll(t);
+<a class="jxr_linenumber" name="33" href="#33">33</a>    }
+<a class="jxr_linenumber" name="34" href="#34">34</a>  }
+</pre>
+<hr/><div id="footer">This page was automatically generated by <a href="http://maven.apache.org/">Maven</a></div></body>
+</html>
+
