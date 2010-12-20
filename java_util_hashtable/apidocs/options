@@ -1,0 +1,26 @@
+-classpath
+'/home/connollys/src/high-scale-lib/java_util_hashtable/target/classes:/home/connollys/.m2/repository/com/github/stephenc/high-scale-lib/high-scale-lib/1.1.1-SNAPSHOT/high-scale-lib-1.1.1-SNAPSHOT.jar'
+-encoding
+'UTF-8'
+-protected
+-sourcepath
+'/home/connollys/src/high-scale-lib/java_util_hashtable/src/main/java'
+-author
+-bottom
+'Copyright &#169; 2010. All Rights Reserved.'
+-charset
+'UTF-8'
+-d
+'/home/connollys/src/high-scale-lib/java_util_hashtable/target/site/apidocs'
+-docencoding
+'UTF-8'
+-doctitle
+'Replacement java.util.Hashtable 1.1.1-SNAPSHOT API'
+-linkoffline
+'http://stephenc.github.com/high-scale-lib/high-scale-lib/apidocs' '/home/connollys/src/high-scale-lib/high-scale-lib/target/site/apidocs'
+-linkoffline
+'http://stephenc.github.com/high-scale-lib/java_util_concurrent_chm/apidocs' '/home/connollys/src/high-scale-lib/java_util_concurrent_chm/target/site/apidocs'
+-use
+-version
+-windowtitle
+'Replacement java.util.Hashtable 1.1.1-SNAPSHOT API'
