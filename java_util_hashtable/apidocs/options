@@ -1,5 +1,5 @@
 -classpath
-'/home/connollys/src/high-scale-lib/java_util_hashtable/target/classes:/home/connollys/.m2/repository/com/github/stephenc/high-scale-lib/high-scale-lib/1.1.1-SNAPSHOT/high-scale-lib-1.1.1-SNAPSHOT.jar'
+'/home/connollys/src/high-scale-lib/java_util_hashtable/target/classes:/home/connollys/src/high-scale-lib/high-scale-lib/target/high-scale-lib-1.1.2.jar'
 -encoding
 'UTF-8'
 -protected
@@ -15,7 +15,9 @@
 -docencoding
 'UTF-8'
 -doctitle
-'Replacement java.util.Hashtable 1.1.1-SNAPSHOT API'
+'Replacement java.util.Hashtable 1.1.2 API'
+-link
+'http://java.sun.com/javase/6/docs/api'
 -linkoffline
 'http://stephenc.github.com/high-scale-lib/high-scale-lib/apidocs' '/home/connollys/src/high-scale-lib/high-scale-lib/target/site/apidocs'
 -linkoffline
@@ -23,4 +25,4 @@
 -use
 -version
 -windowtitle
-'Replacement java.util.Hashtable 1.1.1-SNAPSHOT API'
+'Replacement java.util.Hashtable 1.1.2 API'

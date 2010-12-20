@@ -3,13 +3,14 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <title>Replacement java.util.Hashtable - Surefire Report</title>
+    <title>Replacement java.util.Hashtable - Using Replacement java.util.Hashtable</title>
     <style type="text/css" media="all">
       @import url("./css/maven-base.css");
       @import url("./css/maven-theme.css");
       @import url("./css/site.css");
     </style>
     <link rel="stylesheet" href="./css/print.css" type="text/css" media="print" />
+      <meta name="author" content="Stephen Connolly" />
     <meta name="Date-Revision-yyyymmdd" content="20101220" />
     <meta http-equiv="Content-Language" content="en" />
         
@@ -58,31 +59,17 @@
                           <a href="download.html" title="Download">Download</a>
             </li>
                   <li class="none">
-                          <a href="using.html" title="Using">Using</a>
-            </li>
+            <strong>Using</strong>
+          </li>
           </ul>
                        <h5>Project Documentation</h5>
                   <ul>
                                                                                                                                                                                                                                                                           <li class="collapsed">
                           <a href="project-info.html" title="Project Information">Project Information</a>
                   </li>
-                                                                                                                                    <li class="expanded">
+                                                                                                                          <li class="collapsed">
                           <a href="project-reports.html" title="Project Reports">Project Reports</a>
-                    <ul>
-                      <li class="none">
-                          <a href="cobertura/index.html" title="Cobertura Test Coverage">Cobertura Test Coverage</a>
-            </li>
-                      <li class="none">
-                          <a href="apidocs/index.html" title="JavaDocs">JavaDocs</a>
-            </li>
-                      <li class="none">
-                          <a href="xref/index.html" title="Source Xref">Source Xref</a>
-            </li>
-                      <li class="none">
-            <strong>Surefire Report</strong>
-          </li>
-              </ul>
-        </li>
+                  </li>
           </ul>
                              <a href="http://maven.apache.org/" title="Built by Maven" class="poweredBy">
         <img class="poweredBy" alt="Built by Maven" src="./images/logos/maven-feather.png" />
@@ -93,7 +80,7 @@
     </div>
     <div id="bodyColumn">
       <div id="contentBox">
-        <div class="section"><h2>Surefire Report<a name="Surefire_Report"></a></h2></div><div class="section"><h2>Summary<a name="Summary"></a></h2><a name="Summary"></a><br /><table border="0" class="bodyTable"><tr class="a"><th>Tests</th><th>Errors </th><th>Failures</th><th>Skipped</th><th>Success Rate</th><th>Time</th></tr><tr class="b"><td>0</td><td>0</td><td>0</td><td>0</td><td>0%</td><td>0</td></tr></table><br /><p>Note: failures are anticipated and checked for with assertions while errors are unanticipated.</p><br /></div>
+        <!--  --><!-- Written by Stephen Connolly and released to the public domain, as explained --><!-- at http://creativecommons.org/licenses/publicdomain --><!--  --><div class="section"><h2>Using Replacement java.util.Hashtable<a name="Using_Replacement_java.util.Hashtable"></a></h2><p>The direct replacements match the API - but not all behaviors are covered by the API, and so they may not work for your program. In particular, the replacement for java.util.Hashtable is NOT synchronized (that is the point!), although it is multi-threaded safe. If you rely on the undocumented synchronization behavior of the JDK Hashtable, your program may not work. Similarly, the iteration order is different between this version and the JDK version (this exact issue broke the SpecJBB benchmark when the iteration order was changed slightly (via using a slightly different hash function) between JDK rev's).</p><p>If you want to drop-in the non-blocking versions of Hashtable you'll need to alter your bootclasspath - these classes come directly from your JDK and so are found via the System loader before any class-path hacks can be done.</p><p>To replace the JDK implementation of Hashtable with a non-blocking version of Hashtable, add java_util_hashtable-1.1.2.jar to your java launch line:</p><div><pre>java -Xbootclasspath/p:java_util_hashtable-1.1.2.jar my_app_goes_here</pre></div></div>
       </div>
     </div>
     <div class="clear">
