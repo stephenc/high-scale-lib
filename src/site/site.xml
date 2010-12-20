@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  ~ Written by Stephen Connolly and released to the public domain, as explained
+  ~ at http://creativecommons.org/licenses/publicdomain
+  -->
+
+<project xmlns="http://maven.apache.org/DECORATION/1.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/DECORATION/1.0.0 http://maven.apache.org/xsd/decoration-1.0.0.xsd"
+    name="Highly Scalable Java">
+  <bannerRight>
+    <href>http://creativecommons.org/publicdomain/mark/1.0</href>
+    <src>http://i.creativecommons.org/p/mark/1.0/88x31.png</src>
+  </bannerRight>
+  <body>
+    <breadcrumbs>
+      <item name="Stephen Connolly" href="http://stephenc.github.com"/>
+      <item name="Highly Scalable Java" href="http://stephenc.github.com/high-scale-lib"/>
+    </breadcrumbs>
+    <menu name="Overview">
+      <item name="Introduction" href="index.html"/>
+    </menu>
+    <menu ref="modules" inherit="top"/>
+    <menu ref="reports" inherit="top" />
+  </body>
+</project>
