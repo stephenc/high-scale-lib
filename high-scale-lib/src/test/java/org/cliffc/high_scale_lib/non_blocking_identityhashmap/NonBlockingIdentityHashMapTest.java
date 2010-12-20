@@ -170,7 +170,7 @@ public class NonBlockingIdentityHashMapTest extends TestCase {
       ObjectInputStream in = new ObjectInputStream(fis);
       NonBlockingIdentityHashMap nbhm = (NonBlockingIdentityHashMap)in.readObject();
       in.close();
-      assertEquals(_nbhm.toString(),nbhm.toString());
+      assertThat("serialization works",_nbhm.toString(), anyOf(is("{k1=v1, k2=v2}"),is("{k2=v2, k1=v1}")));
       if( !f.delete() ) throw new IOException("delete failed");
     } catch(IOException ex) {
       ex.printStackTrace();
