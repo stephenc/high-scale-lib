@@ -125,8 +125,8 @@ public class NonBlockingIdentityHashMapTest extends TestCase {
     assertThat ( _nbhm.put("k2","v2"), nullValue() );
 
     String str1 = "";
-    for( Iterator<Entry<String,String>> i = _nbhm.entrySet().iterator(); i.hasNext(); ) {
-      Entry<String,String> e = i.next();
+    for( Iterator<Map.Entry<String,String>> i = _nbhm.entrySet().iterator(); i.hasNext(); ) {
+      Map.Entry<String,String> e = i.next();
       str1 += e.getKey();
     }
     assertThat("found all entries",str1,anyOf(is("k1k2"),is("k2k1")));
@@ -150,8 +150,10 @@ public class NonBlockingIdentityHashMapTest extends TestCase {
 
   public void testSerial() {
     assertTrue ( _nbhm.isEmpty() );
-    assertThat ( _nbhm.put("k1","v1"), nullValue() );
-    assertThat ( _nbhm.put("k2","v2"), nullValue() );
+    final String k1 = "k1";
+    final String k2 = "k2";
+    assertThat ( _nbhm.put(k1,"v1"), nullValue() );
+    assertThat ( _nbhm.put(k2,"v2"), nullValue() );
 
     // Serialize it out
     try {
@@ -170,7 +172,7 @@ public class NonBlockingIdentityHashMapTest extends TestCase {
       ObjectInputStream in = new ObjectInputStream(fis);
       NonBlockingIdentityHashMap nbhm = (NonBlockingIdentityHashMap)in.readObject();
       in.close();
-      assertThat("serialization works",_nbhm.toString(), anyOf(is("{k1=v1, k2=v2}"),is("{k2=v2, k1=v1}")));
+      assertThat("serialization works",nbhm.toString(), anyOf(is("{k1=v1, k2=v2}"),is("{k2=v2, k1=v1}")));
       if( !f.delete() ) throw new IOException("delete failed");
     } catch(IOException ex) {
       ex.printStackTrace();

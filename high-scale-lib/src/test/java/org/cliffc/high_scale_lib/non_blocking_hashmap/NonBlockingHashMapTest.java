@@ -177,7 +177,7 @@ public class NonBlockingHashMapTest extends TestCase {
       ObjectInputStream in = new ObjectInputStream(fis);
       NonBlockingHashMap nbhm = (NonBlockingHashMap)in.readObject();
       in.close();
-      assertEquals(_nbhm.toString(),nbhm.toString());
+      assertThat("serialization works",nbhm.toString(), anyOf(is("{k1=v1, k2=v2}"),is("{k2=v2, k1=v1}")));
       if( !f.delete() ) throw new IOException("delete failed");
     } catch(IOException ex) {
       ex.printStackTrace();
@@ -524,6 +524,109 @@ public class NonBlockingHashMapTest extends TestCase {
     }
     assertEquals("iterator counts differ", iteratorCount, iteratorCount2);
     assertEquals("values().iterator() count", itemCount, iteratorCount);
+  }
+
+  // --- Customer Test Case 4 ------------------------------------------------
+  static private class Test4 implements Runnable {
+    //
+    // Constants
+    //
+    static private final int THREADS = 4;
+    static private final int KEYS = 4;
+    static volatile private AssertionError AE;
+    //
+    // Instance Fields
+    //
+    private final ConcurrentMap<Integer,Integer> _map;
+
+    //
+    // Constructor
+    //
+    private Test4(ConcurrentMap<Integer,Integer> map) { _map = map;  }
+
+    public void run() {
+      try {
+        // Run long enough to trigger compilations, etc
+        for( int i=0; i<100000 && AE==null; i++ )
+          pass();
+      } catch( AssertionError e ) {
+        AE = e;
+      }
+    }
+
+    private void pass() {
+      for( int i = 0    ; i < KEYS; i++)  increment(i);
+      for( int i = KEYS -1; i >= 0; i--)  decrement(i);
+    }
+
+    // increment count entry for given value, creating it of necessary
+    private void increment(int i) {
+      //Integer key = new Integer(i);
+      Integer key = Integer.valueOf(i);
+      while( AE==null ) {
+        // first assume no old count
+        //Integer oldValue = _map.putIfAbsent(key, new Integer(1));
+        Integer oldValue = _map.putIfAbsent(key, Integer.valueOf(1));
+        if (oldValue == null) // done, was no old entry and have made new entry with value 1
+          return;
+
+        int newCount = oldValue.intValue() + 1;
+        if (newCount > THREADS)
+          // shouldn't happen since can only be incremented at most once
+          // by each thread before corresponding decrement
+          throw new AssertionError("count for " + i + " incremented to " + newCount);
+
+        //Integer newValue = new Integer(newCount);
+        Integer newValue = Integer.valueOf(newCount);
+        if (_map.replace(key, oldValue, newValue)) // done, have atomically incremented value by 1
+          return;
+      } // lost update race, retry
+    }
+
+    // decrement count entry for given value, removing it if goes to zero
+    private void decrement(int i) {
+      //Integer key = new Integer(i);
+      Integer key = Integer.valueOf(i);
+      while( AE==null ) {
+        Integer oldValue = _map.get(key);
+        if (oldValue == null)
+          // should not happen because of previous increment for same key
+          // but does - THIS IS THE BUG
+          throw new AssertionError("BUG REPRODUCED, MISSING COUNT FOR " + i );
+
+        int newCount = oldValue.intValue() - 1;
+        if (newCount < 0 ) // shouldn't happen since each decrement preceded by a corresponding increment
+          throw new AssertionError("count for " + i + " decremented to " + newCount);
+
+        if (newCount == 0) {
+          if (_map.remove(key, oldValue)) // done have atomically removed final 1 count
+            return;
+        } else {
+          //Integer newValue = new Integer(newCount);
+          Integer newValue = Integer.valueOf(newCount);
+          if (_map.replace(key, oldValue, newValue)) // done have atomically replace with count 1 lower
+            return;
+        }
+      } // lost update race, retry
+    }
+  }
+
+  // --- testConcurrentRemove
+  public void testConcurrentRemove() throws InterruptedException {
+    ConcurrentMap<Integer,Integer> map
+      // = new ConcurrentHashMap<Integer,Integer>();
+      = new NonBlockingHashMap<Integer,Integer>();
+    map.put   (Integer.valueOf(0),Integer.valueOf(1));
+    map.remove(Integer.valueOf(0));
+
+    Test4.AE = null;
+    Thread[] ts = new Thread[Test4.THREADS];
+    for( int i = 0; i < Test4.THREADS; i++ )
+      (ts[i] = new Thread(new Test4(map), "thread " + i)).start();
+    // See if we handed due to a crash/bug
+    for( int i = 0; i < Test4.THREADS; i++ )
+      ts[i].join();
+    assertTrue( Test4.AE==null );
   }
 
   // This test is a copy of the JCK test Hashtable2027, which is incorrect.

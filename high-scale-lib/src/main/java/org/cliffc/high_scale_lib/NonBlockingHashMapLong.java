@@ -622,31 +622,34 @@ public class NonBlockingHashMapLong<TypeV>
       
       // ---
       // We are finally prepared to update the existing table
-      assert !(V instanceof Prime);
+      while( true ) {
+        assert !(V instanceof Prime);
       
-      // Must match old, and we do not?  Then bail out now.  Note that either V
-      // or expVal might be TOMBSTONE.  Also V can be null, if we've never
-      // inserted a value before.  expVal can be null if we are called from
-      // copy_slot.
-
-      if( expVal != NO_MATCH_OLD && // Do we care about expected-Value at all?
-          V != expVal &&        // No instant match already?
-          (expVal != MATCH_ANY || V == TOMBSTONE || V == null) &&
-          !(V==null && expVal == TOMBSTONE) &&    // Match on null/TOMBSTONE combo
-          (expVal == null || !expVal.equals(V)) ) // Expensive equals check at the last
-        return V;               // Do not update!
-
-      // Actually change the Value in the Key,Value pair
-      if( CAS_val(idx, V, putval ) ) {
-        // CAS succeeded - we did the update!
-        // Both normal put's and table-copy calls putIfMatch, but table-copy
-        // does not (effectively) increase the number of live k/v pairs.
-        if( expVal != null ) {
-          // Adjust sizes - a striped counter
-          if(  (V == null || V == TOMBSTONE) && putval != TOMBSTONE ) _size.add( 1);
-          if( !(V == null || V == TOMBSTONE) && putval == TOMBSTONE ) _size.add(-1);
-        }
-      } else {                  // Else CAS failed
+        // Must match old, and we do not?  Then bail out now.  Note that either V
+        // or expVal might be TOMBSTONE.  Also V can be null, if we've never
+        // inserted a value before.  expVal can be null if we are called from
+        // copy_slot.
+        
+        if( expVal != NO_MATCH_OLD && // Do we care about expected-Value at all?
+            V != expVal &&        // No instant match already?
+            (expVal != MATCH_ANY || V == TOMBSTONE || V == null) &&
+            !(V==null && expVal == TOMBSTONE) &&    // Match on null/TOMBSTONE combo
+            (expVal == null || !expVal.equals(V)) ) // Expensive equals check at the last
+          return V;               // Do not update!
+        
+        // Actually change the Value in the Key,Value pair
+        if( CAS_val(idx, V, putval ) ) {
+          // CAS succeeded - we did the update!
+          // Both normal put's and table-copy calls putIfMatch, but table-copy
+          // does not (effectively) increase the number of live k/v pairs.
+          if( expVal != null ) {
+            // Adjust sizes - a striped counter
+            if(  (V == null || V == TOMBSTONE) && putval != TOMBSTONE ) _size.add( 1);
+            if( !(V == null || V == TOMBSTONE) && putval == TOMBSTONE ) _size.add(-1);
+          }
+          return (V==null && expVal!=null) ? TOMBSTONE : V;
+      } 
+        // Else CAS failed
         V = _vals[idx];         // Get new value
         // If a Prime'd value got installed, we need to re-run the put on the
         // new table.  Otherwise we lost the CAS to another racing put.
@@ -654,10 +657,6 @@ public class NonBlockingHashMapLong<TypeV>
         if( V instanceof Prime )
           return copy_slot_and_check(idx,expVal).putIfMatch(key,putval,expVal);
       }
-      // Win or lose the CAS, we are done.  If we won then we know the update
-      // happened as expected.  If we lost, it means "we won but another thread
-      // immediately stomped our update with no chance of a reader reading".
-      return (V==null && expVal!=null) ? TOMBSTONE : V;
     }
     
     // --- tableFull ---------------------------------------------------------
