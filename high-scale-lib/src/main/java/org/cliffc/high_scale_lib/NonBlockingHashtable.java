@@ -286,7 +286,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
   /** Tests if the key in the table using the <tt>equals</tt> method.
    * @return <tt>true</tt> if the key is in the table using the <tt>equals</tt> method
    * @throws NullPointerException if the specified key is null  */
-  @Override 
   public boolean containsKey( Object key )            { return get(key) != null; }
 
   /** Legacy method testing if some key maps into the specified value in this
@@ -356,14 +355,12 @@ public class NonBlockingHashtable<TypeK, TypeV>
   /** Copies all of the mappings from the specified map to this one, replacing
    *  any existing mappings.
    *  @param m mappings to be stored in this map */
-  @Override
   public void putAll(Map<? extends TypeK, ? extends TypeV> m) {
     for (Map.Entry<? extends TypeK, ? extends TypeV> e : m.entrySet())
       put(e.getKey(), e.getValue());
   }
 
   /** Removes all of the mappings from this map. */
-  @Override
   public void clear() {         // Smack a new empty table down
     Object[] newkvs = new NonBlockingHashtable(MIN_SIZE)._kvs;
     while( !CAS_kvs(_kvs,newkvs) ) // Spin until the clear works
@@ -376,7 +373,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  @param val value whose presence in this map is to be tested
    *  @return <tt>true</tt> if this map maps one or more keys to the specified value
    *  @throws NullPointerException if the specified value is null */
-  @Override
   public boolean containsValue( final Object val ) {
     if( val == null ) throw new NullPointerException();
     for( TypeV V : values() )
@@ -1152,7 +1148,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  to traverse elements as they existed upon construction of the iterator,
    *  and may (but is not guaranteed to) reflect any modifications subsequent
    *  to construction. */
-  @Override
   public Collection<TypeV> values() {
     return new AbstractCollection<TypeV>() {
       @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear        ( ); }
@@ -1191,7 +1186,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  to traverse elements as they existed upon construction of the iterator,
    *  and may (but is not guaranteed to) reflect any modifications subsequent
    *  to construction.  */
-  @Override
   public Set<TypeK> keySet() {
     return new AbstractSet<TypeK> () {
       @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear   ( ); }
@@ -1243,7 +1237,6 @@ public class NonBlockingHashtable<TypeK, TypeV>
    *  to support this iteration.  Iterating using {@link #keySet} or {@link
    *  #values} will be more efficient.
    */
-  @Override
   public Set<Map.Entry<TypeK,TypeV>> entrySet() {
     return new AbstractSet<Map.Entry<TypeK,TypeV>>() {
       @Override public void    clear   (          ) {        NonBlockingHashtable.this.clear( ); }
